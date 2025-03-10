@@ -1,0 +1,7 @@
+name=Mission LunaTrix
+author=rae
+description=One small ollie for man, one giant kickflip for mankind.
+bundleID=wtf.rae.lunatrix
+version=1.0.0
+buildNumber=1513
+imagePath=images/system
