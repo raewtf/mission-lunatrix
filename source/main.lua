@@ -1,6 +1,7 @@
 classes = {}
 
 -- Importing things
+import 'CoreLibs/ui'
 import 'CoreLibs/math'
 import 'CoreLibs/timer'
 import 'CoreLibs/crank'
@@ -9,6 +10,8 @@ import 'CoreLibs/sprites'
 import 'CoreLibs/graphics'
 import 'CoreLibs/animation'
 import 'scenemanager'
+import 'achievements'
+import 'cheevos'
 import 'title'
 scenemanager = scenemanager()
 
@@ -23,6 +26,11 @@ pd.display.setRefreshRate(30)
 gfx.setBackgroundColor(gfx.kColorBlack)
 gfx.setLineWidth(2)
 
+catalog = false
+if pd.metadata.bundleID == "wtf.rae.lunatrix" then
+	catalog = true
+end
+
 -- Save check
 function savecheck()
     save = pd.datastore.read()
@@ -33,27 +41,69 @@ function savecheck()
 	save.lifetime_score = save.lifetime_score or 0
 	save.highest_planet = save.highest_planet or 0
 	save.arcade_runs = save.arcade_runs or 0
+	save.daily_runs = save.daily_runs or 0
 	save.best_combo = save.best_combo or 0
+	if save.spin_camera == nil then save.spin_camera = true end
+	if save.perf == nil then save.perf = false end
+	if save.radar == nil then save.radar = true end
+	save.flags = save.flags or 0
+	if save.lastdaily == nil then save.lastdaily = {} end
+	save.lastdaily.year = save.lastdaily.year or 0
+	save.lastdaily.month = save.lastdaily.month or 0
+	save.lastdaily.day = save.lastdaily.day or 0
+	save.lastdaily.score = save.lastdaily.score or 0
+	if save.lastdaily.sent == nil then save.lastdaily.sent = false end
 end
+
+title_memorize = 'newgame'
 
 -- ... now we run that!
 savecheck()
 
+achievements.initialize(achievementData, true)
+
+function updatecheevos()
+	achievements.advanceTo('runs10', save.arcade_runs)
+	achievements.advanceTo('runs25', save.arcade_runs)
+	achievements.advanceTo('runs50', save.arcade_runs)
+	achievements.advanceTo('runs100', save.arcade_runs)
+	achievements.advanceTo('points10000', save.score)
+	achievements.advanceTo('points50000', save.score)
+	achievements.advanceTo('points100000', save.score)
+	achievements.advanceTo('points500000', save.score)
+	achievements.advanceTo('lifetime100000', save.lifetime_score)
+	achievements.advanceTo('lifetime500000', save.lifetime_score)
+	achievements.advanceTo('lifetime1000000', save.lifetime_score)
+	achievements.advanceTo('lifetime10000000', save.lifetime_score)
+	if save.highest_planet > 1 then achievements.grant('moon') end
+	achievements.advanceTo('moons5', save.highest_planet)
+	achievements.advanceTo('moons10', save.highest_planet)
+	achievements.advanceTo('moons25', save.highest_planet)
+	if (save.lastdaily.year ~= nil and save.lastdaily.year > 0) then achievements.grant('daily') end
+	if save.flags > 0 then achievements.grant('flag') end
+	achievements.advanceTo('flags25', save.flags)
+	achievements.advanceTo('flags50', save.flags)
+	achievements.advanceTo('flags100', save.flags)
+
+	achievements.save()
+end
+
+updatecheevos()
+
 -- When the game closes...
 function pd.gameWillTerminate()
     pd.datastore.write(save)
-	if pd.display.getScale() == 1 then
-		local img = gfx.getDisplayImage()
-		local byebye = gfx.imagetable.new('images/exit')
-		local spray = smp.new('audio/sfx/spray')
-		if save.sfx then spray:play() end
-		local byebyeanim = gfx.animator.new(1400, 1, #byebye)
-		gfx.setDrawOffset(0, 0)
-		while not byebyeanim:ended() do
-			img:draw(0, 0)
-			byebye:drawImage(math.floor(byebyeanim:currentValue()), 0, 0)
-			pd.display.flush()
-		end
+	pd.display.setScale(1)
+	local img = gfx.getDisplayImage()
+	local byebye = gfx.imagetable.new('images/exit')
+	local spray = smp.new('audio/sfx/spray')
+	if save.sfx then spray:play() end
+	local byebyeanim = gfx.animator.new(1400, 1, #byebye)
+	gfx.setDrawOffset(0, 0)
+	while not byebyeanim:ended() do
+		img:draw(0, 0)
+		byebye:drawImage(math.floor(byebyeanim:currentValue()), 0, 0)
+		pd.display.flush()
 	end
 end
 
@@ -122,6 +172,18 @@ function pd.timer:resetnew(duration, startValue, endValue, easingFunction)
     self.timerEndedCallback = self.timerEndedCallback
 end
 
+-- http://lua-users.org/wiki/FormattingNumbers
+function commalize(amount)
+  local formatted = amount
+  while true do
+	formatted, k = string.gsub(formatted, "^(-?%d+)(%d%d%d)", '%1,%2')
+	if (k==0) then
+	  break
+	end
+  end
+  return formatted
+end
+
 -- This function shakes the screen. int is a number representing intensity. time is a number representing duration
 function shakies(time, int)
 	if pd.getReduceFlashing() or perf then -- If reduce flashing is enabled, then don't shake.
@@ -137,7 +199,7 @@ function shakies_y(time, int)
 	anim_shakies_y = pd.timer.new(time or 750, int or 10, 0, pd.easingFunctions.outElastic)
 end
 
-scenemanager:switchscene(title)
+scenemanager:switchscene(title, true)
 
 function pd.update()
 	-- Screen shake update logic
@@ -151,4 +213,7 @@ function pd.update()
 	-- Catch-all stuff ...
 	gfx.sprite.update()
 	pd.timer.updateTimers()
+	if show_crank then -- If the variable allows for it...
+		pd.ui.crankIndicator:draw(0, 0) -- Show the Use the Crank! indicator.
+	end
 end

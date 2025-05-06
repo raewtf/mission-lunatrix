@@ -12,6 +12,7 @@ function interstition:init(...)
 	gfx.sprite.setAlwaysRedraw(true) -- Should this scene redraw the sprites constantly?
 	pd.display.setScale(1)
 	pd.datastore.write(save)
+	show_crank = false
 
 	assets = {
 		video = gfx.imagetable.new('images/interstition'),
@@ -28,14 +29,17 @@ function interstition:init(...)
 	vars.timer.timerEndedCallback = function()
 		if save.sfx then assets.land:play() end
 		pd.timer.performAfterDelay(1500, function()
-			scenemanager:switchscene(game, vars.score, vars.final_planet, vars.best_combo)
+			scenemanager:switchscene(game, vars.score, vars.planet + 1, vars.best_combo)
 		end)
 	end
+	vars.timer.delay = 500
 
 	gfx.sprite.setBackgroundDrawingCallback(function(x, y, width, height)
 		assets.video[floor(vars.timer.value) <= 61 and floor(vars.timer.value) or 61]:draw(0, 0)
 	end)
 
-	newmusic('audio/music/interstition')
+	pd.timer.performAfterDelay(500, function()
+		newmusic('audio/music/interstition')
+	end)
 	self:add()
 end

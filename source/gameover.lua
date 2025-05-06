@@ -10,7 +10,22 @@ function gameover:init(...)
 	local args = {...} -- Arguments passed in through the scene management will arrive here
 	gfx.sprite.setAlwaysRedraw(true) -- Should this scene redraw the sprites constantly?
 	pd.display.setScale(1)
-	pd.datastore.write(save)
+	show_crank = false
+
+	function pd.gameWillPause() -- When the game's paused...
+		local menu = pd.getSystemMenu()
+		menu:removeAllMenuItems()
+		if not scenemanager.transitioning then
+			menu:addMenuItem(text('retry'), function()
+				scenemanager:iris(game)
+				if save.sfx then assets.select:play() end
+			end)
+			menu:addMenuItem(text('back'), function()
+				scenemanager:transitionscene(title)
+				if save.sfx then assets.back:play() end
+			end)
+		end
+	end
 
 	assets = {
 		cutout = gfx.font.new('fonts/cutout'),
@@ -18,6 +33,8 @@ function gameover:init(...)
 		gameover = gfx.image.new('images/gameover'),
 		stars_s = gfx.image.new('images/stars_s'),
 		stars_l = gfx.image.new('images/stars_l'),
+		select = smp.new('audio/sfx/select'),
+		back = smp.new('audio/sfx/back'),
 	}
 
 	vars = {
@@ -32,14 +49,18 @@ function gameover:init(...)
 		AButtonDown = function()
 			fademusic(300)
 			scenemanager:irisscene(game)
+			if save.sfx then assets.select:play() end
 		end,
 
 		BButtonDown = function()
-			stopmusic()
+			fademusic(300)
 			scenemanager:transitionscene(title)
+			if save.sfx then assets.back:play() end
 		end,
 	}
-	pd.inputHandlers.push(vars.gameoverHandlers)
+	pd.timer.performAfterDelay(scenemanager.transitiontime, function()
+		pd.inputHandlers.push(vars.gameoverHandlers)
+	end)
 
 	vars.float.reverses = true
 	vars.float.repeats = true
@@ -51,15 +72,17 @@ function gameover:init(...)
 	if vars.highest_planet > save.highest_planet then save.highest_planet = vars.highest_planet end
 	if vars.best_combo > save.best_combo then save.best_combo = vars.best_combo end
 
+	pd.datastore.write(save)
+
 	gfx.sprite.setBackgroundDrawingCallback(function(x, y, width, height)
 		assets.stars_s:draw(vars.stars_s.value, 0)
 		assets.stars_l:draw(vars.stars_l.value, 0)
 		assets.cutout:drawTextAligned(text('gameover'), 125, 10, kTextAlignment.center)
 		assets.gameover:draw(245, 25 + vars.float.value)
 		gfx.setImageDrawMode(gfx.kDrawModeFillWhite)
-		assets.pedallica:drawTextAligned(text('totalscore') .. vars.score .. 'pts', 125, 70, kTextAlignment.center)
-		assets.pedallica:drawTextAligned(text('moonsseen') .. vars.highest_planet, 125, 90, kTextAlignment.center)
-		assets.pedallica:drawTextAligned(text('bestcombo') .. vars.best_combo .. 'pts', 125, 110, kTextAlignment.center)
+		assets.pedallica:drawTextAligned(text('totalscore') .. commalize(vars.score) .. text('pts'), 125, 70, kTextAlignment.center)
+		assets.pedallica:drawTextAligned(text('moonsseen') .. commalize(vars.highest_planet), 125, 90, kTextAlignment.center)
+		assets.pedallica:drawTextAligned(text('bestcombo') .. commalize(vars.best_combo), 125, 110, kTextAlignment.center)
 		assets.pedallica:drawTextAligned(text('pressA'), 125, 150, kTextAlignment.center)
 		assets.pedallica:drawTextAligned(text('pressB'), 125, 170, kTextAlignment.center)
 		gfx.setImageDrawMode(gfx.kDrawModeCopy)
@@ -67,7 +90,4 @@ function gameover:init(...)
 
 	newmusic('audio/music/gameover', false)
 	self:add()
-end
-
-function gameover:update()
 end

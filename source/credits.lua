@@ -11,6 +11,18 @@ function credits:init(...)
 	gfx.sprite.setAlwaysRedraw(true) -- Should this scene redraw the sprites constantly?
 	pd.display.setScale(1)
 	pd.datastore.write(save)
+	show_crank = false
+
+	function pd.gameWillPause() -- When the game's paused...
+		local menu = pd.getSystemMenu()
+		menu:removeAllMenuItems()
+		if not scenemanager.transitioning then
+			menu:addMenuItem(text('back'), function()
+				scenemanager:transitionscene(title)
+				if save.sfx then assets.back:play() end
+			end)
+		end
+	end
 
 	assets = {
 		cutout = gfx.font.new('fonts/cutout'),
@@ -27,7 +39,9 @@ function credits:init(...)
 			if save.sfx then assets.back:play() end
 		end,
 	}
-	pd.inputHandlers.push(vars.creditsHandlers)
+	pd.timer.performAfterDelay(scenemanager.transitiontime, function()
+		pd.inputHandlers.push(vars.creditsHandlers)
+	end)
 
 	gfx.sprite.setBackgroundDrawingCallback(function(x, y, width, height)
 		assets.credits:draw(0, 0)
@@ -36,7 +50,4 @@ function credits:init(...)
 	end)
 
 	self:add()
-end
-
-function credits:update()
 end

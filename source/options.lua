@@ -11,6 +11,18 @@ function options:init(...)
 	gfx.sprite.setAlwaysRedraw(true) -- Should this scene redraw the sprites constantly?
 	pd.display.setScale(1)
 	pd.datastore.write(save)
+	show_crank = false
+
+	function pd.gameWillPause() -- When the game's paused...
+		local menu = pd.getSystemMenu()
+		menu:removeAllMenuItems()
+		if not scenemanager.transitioning then
+			menu:addMenuItem(text('back'), function()
+				scenemanager:transitionscene(title)
+				if save.sfx then assets.back:play() end
+			end)
+		end
+	end
 
 	assets = {
 		cutout = gfx.font.new('fonts/cutout'),
@@ -24,7 +36,7 @@ function options:init(...)
 
 	vars = {
 		selection = 1,
-		selections = {'music', 'sfx'},
+		selections = {'music', 'sfx', 'perf', 'spin_camera'},
 	}
 	vars.optionsHandlers = {
 		upButtonDown = function()
@@ -87,11 +99,17 @@ function options:init(...)
 				end
 			elseif vars.selections[vars.selection] == "sfx" then
 				save.sfx = not save.sfx
+			elseif vars.selections[vars.selection] == "perf" then
+				save.perf = not save.perf
+			elseif vars.selections[vars.selection] == "spin_camera" then
+				save.spin_camera = not save.spin_camera
 			end
 			if save.sfx then assets.select:play() end
 		end,
 	}
-	pd.inputHandlers.push(vars.optionsHandlers)
+	pd.timer.performAfterDelay(scenemanager.transitiontime, function()
+		pd.inputHandlers.push(vars.optionsHandlers)
+	end)
 
 	for i = 1, #vars.selections do
 		vars['selectiontarget' .. i] = 0
@@ -101,23 +119,33 @@ function options:init(...)
 
 	gfx.sprite.setBackgroundDrawingCallback(function(x, y, width, height)
 		assets.options:draw(0, 0)
+		assets.highlight:draw(-10 + vars['selectionx' .. vars.selection], -5 + (30 * vars.selection))
 		assets.cutout:drawTextAligned(text('options'), 200, 10, kTextAlignment.center)
-		assets.highlight:draw(-10 + vars['selectionx' .. vars.selection], 15 + (30 * vars.selection))
 		if save.music then
-			assets.cutout:drawText(text('musicon'), 23 + vars.selectionx1, 65)
+			assets.cutout:drawText(text('musicon'), 23 + vars.selectionx1, 45)
 		else
-			assets.cutout:drawText(text('musicoff'), 23 + vars.selectionx1, 65)
+			assets.cutout:drawText(text('musicoff'), 23 + vars.selectionx1, 45)
 		end
 		if save.sfx then
-			assets.cutout:drawText(text('sfxon'), 23 + vars.selectionx2, 95)
+			assets.cutout:drawText(text('sfxon'), 23 + vars.selectionx2, 75)
 		else
-			assets.cutout:drawText(text('sfxoff'), 23 + vars.selectionx2, 95)
+			assets.cutout:drawText(text('sfxoff'), 23 + vars.selectionx2, 75)
+		end
+		if save.perf then
+			assets.cutout:drawText(text('perfon'), 23 + vars.selectionx3, 105)
+		else
+			assets.cutout:drawText(text('perfoff'), 23 + vars.selectionx3, 105)
+		end
+		if save.spin_camera then
+			assets.cutout:drawText(text('spin_cameraon'), 23 + vars.selectionx4, 135)
+		else
+			assets.cutout:drawText(text('spin_cameraoff'), 23 + vars.selectionx4, 135)
 		end
 		gfx.setImageDrawMode(gfx.kDrawModeFillWhite)
-		assets.pedallica:drawText(text('bestscore') .. save.score .. text('pts'), 23, 185)
-		assets.pedallica:drawText(text('lifetimescore') .. save.lifetime_score .. text('pts'), 23, 205)
-		assets.pedallica:drawTextAligned(text('mostmoons') .. save.highest_planet, 377, 185, kTextAlignment.right)
-		assets.pedallica:drawTextAligned(text('totalruns') .. save.arcade_runs, 377, 205, kTextAlignment.right)
+		assets.pedallica:drawText(text('bestscore') .. commalize(save.score) .. text('pts'), 23, 185)
+		assets.pedallica:drawText(text('lifetimescore') .. commalize(save.lifetime_score) .. text('pts'), 23, 205)
+		assets.pedallica:drawTextAligned(text('mostmoons') .. commalize(save.highest_planet), 377, 185, kTextAlignment.right)
+		assets.pedallica:drawTextAligned(text('totalruns') .. commalize(save.arcade_runs), 377, 205, kTextAlignment.right)
 		gfx.setImageDrawMode(gfx.kDrawModeCopy)
 	end)
 

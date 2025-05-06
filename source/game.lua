@@ -1,5 +1,6 @@
 import 'gameover'
 import 'interstition'
+import 'dailyorbit'
 
 -- Setting up consts
 local pd <const> = playdate
@@ -16,25 +17,43 @@ local floor <const> = math.floor
 local ceil <const> = math.ceil
 local min <const> = math.min
 local max <const> = math.max
+local format <const> = string.format
 
 class('game').extends(gfx.sprite) -- Create the scene's class
 function game:init(...)
 	game.super.init(self)
 	local args = {...} -- Arguments passed in through the scene management will arrive here
-	gfx.sprite.setAlwaysRedraw(false) -- Should this scene redraw the sprites constantly?
+	gfx.sprite.setAlwaysRedraw(true) -- Should this scene redraw the sprites constantly?
 	pd.display.setScale(2)
 	pd.datastore.write(save)
+	show_crank = true
+
+	function pd.gameWillPause() -- When the game's paused...
+		local menu = pd.getSystemMenu()
+		menu:removeAllMenuItems()
+		if not scenemanager.transitioning and not vars.dead and not vars.won then
+			menu:addCheckmarkMenuItem('radar', save.radar, function(val)
+				save.radar = val
+			end)
+			menu:addMenuItem(text('endgame'), function()
+				vars.o2:resetnew(1, 1, 0)
+			end)
+		end
+	end
 
 	assets = {
+		--test = gfx.image.new('images/test'),
 		surface = gfx.image.new('images/surface'),
-		stars_small = gfx.image.new('images/stars_s'),
-		stars_large = gfx.image.new('images/stars_l'),
+		stars_small = gfx.image.new('images/stars_s2'),
+		stars_large = gfx.image.new('images/stars_l2'),
 		backplate = gfx.image.new('images/backplate'),
 		dark_side = gfx.image.new('images/dark_side'),
 		o2 = gfx.imagetable.new('images/o2'),
-		crater = gfx.imagetable.new('images/crater/crater'),
-		o22 = gfx.imagetable.new('images/o22/o2'),
-		rover = gfx.imagetable.new('images/rover/rover'),
+		crater = gfx.imagetable.new('images/crater'),
+		o22 = gfx.imagetable.new('images/o22'),
+		rover = gfx.imagetable.new('images/rover'),
+		flag = gfx.imagetable.new('images/flag'),
+		ufo = gfx.imagetable.new('images/ufo'),
 		roll = smp.new('audio/sfx/roll'),
 		land = smp.new('audio/sfx/land'),
 		take = smp.new('audio/sfx/take'),
@@ -47,14 +66,21 @@ function game:init(...)
 		pedallica = gfx.font.new('fonts/pedallica'),
 		back = smp.new('audio/sfx/back'),
 		powerup = smp.new('audio/sfx/powerup'),
+		aufo = smp.new('audio/sfx/ufo'),
 		hit = smp.new('audio/sfx/hit'),
-		bitmore = gfx.font.new('fonts/bitmore'),
+		bitmore = gfx.font.new('fonts/bitmoreoutline'),
+		radar_crater = gfx.image.new('images/radar_crater'),
+		radar_o2 = gfx.image.new('images/radar_o2'),
+		radar_rover = gfx.image.new('images/radar_rover'),
+		trick = gfx.imagetable.new('images/trick'),
+		trickster = gfx.imagetable.new('images/trickster'),
 	}
 
 	vars = {
 		total_score = args[1] or 0,
 		planet = args[2] or 1,
 		best_combo = args[3] or 0,
+		daily = args[4] or false,
 		score = 0,
 		combo = 1,
 		combo_timer = pd.timer.new(1, 0, 0),
@@ -62,10 +88,11 @@ function game:init(...)
 		player_y = 0,
 		player_tile_x = 1,
 		player_tile_y = 1,
-		player_tile = 1,
 		dead = false,
 		player_rotation = rad(pd.getCrankPosition()),
 		camera_rotation = rad(pd.getCrankPosition()),
+		test_camera_rotation = rad(pd.getCrankPosition()),
+		show_moon = true,
 		jumping = false,
 		crashed = false,
 		won = false,
@@ -73,50 +100,65 @@ function game:init(...)
 		trick_crank = 0,
 		trick_done = '',
 		tricks_done = 0,
+		overlay = '',
 		eligible_to_win = false,
+		trick_overlay = pd.timer.new(300, 1.01, 4.99),
+		trick_slide = 0,
+		trick_lerp = 0,
 		jump = pd.timer.new(1, 0, 0),
 		crank = pd.getCrankPosition(),
+		crank2 = pd.getCrankPosition(),
+		origin = pd.getCrankPosition(),
 		crater = pd.timer.new(2000, 1, 30),
 		flash = pd.timer.new(250, 2.99, 1),
+		trick_cooldown = pd.timer.new(1, 0, 0),
+		trickster_timer = pd.timer.new(500, 1.01, 4.99),
 		map = {
-			{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},
-			{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},
-			{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},
-			{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},
-			{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},
-			{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},
-			{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},
-			{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},
-			{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},
-			{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},
-			{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},
-			{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},
-			{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},
-			{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},
-			{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},
-			{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},
-			{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},
-			{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},
-			{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},
-			{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},
-			{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},
-			{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},
-			{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},
-			{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},
-			{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},{0},
+			0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+			0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+			0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+			0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+			0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+			0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+			0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+			0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+			0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+			0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+			0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+			0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+			0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+			0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+			0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+			0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+			0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+			0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+			0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+			0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+			0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+			0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+			0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+			0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+			0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
 		},
+		items_x = {},
+		items_y = {},
 		point = pd.geometry.point.new(0, 0),
 	}
 
 	vars.crater.repeats = true
 	vars.jump.discardOnCompletion = false
 	vars.flash.repeats = true
-	vars.player_start_speed = 10
-	vars.player_speed = 10
-	vars.point_threshold = 25000 + (vars.planet * 1000)
-	vars.o2_start = max(90000 - (vars.planet * 500), 20000)
+	vars.player_start_speed = 8
+	vars.player_speed = 8
+	vars.point_threshold = 8000 + (vars.planet * 1000)
+	vars.o2_start = max(110000 - (vars.planet * 2000), 20000)
 	vars.o2 = pd.timer.new(vars.o2_start, vars.o2_start, 0)
 	vars.combo_timer.discardOnCompletion = false
+	vars.trick_cooldown.discardOnCompletion = false
+	vars.trick_overlay.repeats = true
+	vars.trickster_timer.timerEndedCallback = function()
+		vars.trickster_timer:resetnew(500, 1.01, 4.99)
+	end
 	vars.combo_timer.timerEndedCallback = function()
 		if save.sfx and vars.combo ~= 1 then assets.back:play() end
 		vars.combo = 1
@@ -129,97 +171,103 @@ function game:init(...)
 			assets.roll:stop()
 			fademusic(900)
 			pd.timer.performAfterDelay(1000, function()
-				scenemanager:irissceneout(gameover, vars.total_score, vars.planet, vars.best_combo)
+				if vars.daily then
+					scenemanager:irissceneout(dailyorbit, vars.total_score, vars.best_combo)
+				else
+					scenemanager:irissceneout(gameover, vars.total_score, vars.planet, vars.best_combo)
+				end
 			end)
 		end
 	end
 	if save.sfx then assets.roll:play(0) end
 
-	for i = 1, 625 do
-		local rand = random(1, 300)
-		if rand <= 3 then
-			vars.map[i] = 1
-		elseif rand == 4 then
-			vars.map[i] = 2
-		elseif rand == 5 then
-			vars.map[i] = 3
-		else
-			vars.map[i] = 0
-		end
+	if vars.daily then
+		vars.gmttime = pd.getGMTTime()
+		math.randomseed(vars.gmttime.year .. vars.gmttime.month .. vars.gmttime.day)
+	else
+		math.randomseed(playdate.getSecondsSinceEpoch())
 	end
 
-	class('player', _, classes).extends(gfx.sprite)
-	function classes.player:init()
-		classes.player.super.init(self)
-		self:setZIndex(1)
-		self:setCenter(0.5, 1)
-		self:setImage(assets.skater[1])
-		self:moveTo(100, 110)
-		self:add()
+	pd.timer.performAfterDelay(3000, function()
+		vars.show_moon = false
+	end)
+
+	vars.target_craters = random(5, 10)
+	if vars.daily then
+		vars.target_o2s = random(4, 7)
+	else
+		vars.target_o2s = random(2, 3)
 	end
-	function classes.player:update()
-		local change = pd.getCrankChange()
-		if vars.jumping then
-			self:setImage(assets.skater[4])
-		elseif vars.dead then
-			self:setImage(assets.skater[5])
-		else
-			if change >= 2 then
-				self:setImage(assets.skater[3])
-			elseif change <= -2 then
-				self:setImage(assets.skater[2])
-			else
-				self:setImage(assets.skater[1])
-			end
+	vars.target_rovers = random(4, 6)
+	vars.target_flags = floor(random(0, 5) / 5)
+	vars.target_ufos = floor(random(0, 10) / 10)
+	vars.craters = 0
+	vars.o2s = 0
+	vars.rovers = 0
+	vars.flags = 0
+	vars.ufos = 0
+	vars.ufoindex = {}
+
+	local randx
+	local randy
+
+	while vars.craters < vars.target_craters do
+		randx = random(2, 25)
+		randy = random(2, 25)
+		if vars.map[(randx)+((randy-1)*25)] == 0 and vars.map[(randx+1)+((randy-1)*25)] == 0 and vars.map[(randx-1)+((randy-1)*25)] == 0 and vars.map[(randx)+((randy)*25)] == 0 and vars.map[(randx)+((randy-2)*25)] == 0 and vars.map[(randx+1)+((randy)*25)] == 0 and vars.map[(randx-1)+((randy)*25)] == 0 and vars.map[(randx+1)+((randy-2)*25)] == 0 and vars.map[(randx-1)+((randy-2)*25)] == 0 then
+			vars.map[randx+((randy-1)*25)] = 1
+			vars.craters += 1
+			table.insert(vars.items_x, randx)
+			table.insert(vars.items_y, randy)
 		end
-		if vars.crashed then
-			if floor(vars.flash.value) >= 2 then
-				self:setVisible(false)
-			else
-				self:setVisible(true)
-			end
+	end
+	while vars.o2s < vars.target_o2s do
+		randx = random(2, 25)
+		randy = random(2, 25)
+		if vars.map[(randx)+((randy-1)*25)] == 0 and vars.map[(randx+1)+((randy-1)*25)] == 0 and vars.map[(randx-1)+((randy-1)*25)] == 0 and vars.map[(randx)+((randy)*25)] == 0 and vars.map[(randx)+((randy-2)*25)] == 0 and vars.map[(randx+1)+((randy)*25)] == 0 and vars.map[(randx-1)+((randy)*25)] == 0 and vars.map[(randx+1)+((randy-2)*25)] == 0 and vars.map[(randx-1)+((randy-2)*25)] == 0 then
+			vars.map[randx+((randy-1)*25)] = 2
+			vars.o2s += 1
+			table.insert(vars.items_x, randx)
+			table.insert(vars.items_y, randy)
 		end
-		if vars.eligible_to_win then
-			if floor(vars.flash.value) >= 2 then
-				self:setImageDrawMode(gfx.kDrawModeInverted)
-			else
-				self:setImageDrawMode(gfx.kDrawModeCopy)
-			end
+	end
+	while vars.rovers < vars.target_rovers do
+		randx = random(2, 25)
+		randy = random(2, 25)
+		if vars.map[(randx)+((randy-1)*25)] == 0 and vars.map[(randx+1)+((randy-1)*25)] == 0 and vars.map[(randx-1)+((randy-1)*25)] == 0 and vars.map[(randx)+((randy)*25)] == 0 and vars.map[(randx)+((randy-2)*25)] == 0 and vars.map[(randx+1)+((randy)*25)] == 0 and vars.map[(randx-1)+((randy)*25)] == 0 and vars.map[(randx+1)+((randy-2)*25)] == 0 and vars.map[(randx-1)+((randy-2)*25)] == 0 then
+			vars.map[randx+((randy-1)*25)] = 3
+			vars.rovers += 1
+			table.insert(vars.items_x, randx)
+			table.insert(vars.items_y, randy)
 		end
-		vars.crank += pd.getCrankChange()
-		if not vars.dead then
-			if not vars.jumping then
-				vars.player_rotation = rad(vars.crank)
-			end
-			vars.camera_rotation = rad(vars.crank)
-			self:setRotation(change/2, 1 - (abs(change) / 250), 1 + (abs(change) / 250))
+	end
+	while vars.flags < vars.target_flags do
+		randx = random(2, 25)
+		randy = random(2, 25)
+		if vars.map[(randx)+((randy-1)*25)] == 0 and vars.map[(randx+1)+((randy-1)*25)] == 0 and vars.map[(randx-1)+((randy-1)*25)] == 0 and vars.map[(randx)+((randy)*25)] == 0 and vars.map[(randx)+((randy-2)*25)] == 0 and vars.map[(randx+1)+((randy)*25)] == 0 and vars.map[(randx-1)+((randy)*25)] == 0 and vars.map[(randx+1)+((randy-2)*25)] == 0 and vars.map[(randx-1)+((randy-2)*25)] == 0 then
+			vars.map[randx+((randy-1)*25)] = 4
+			vars.flags += 1
+			table.insert(vars.items_x, randx)
+			table.insert(vars.items_y, randy)
 		end
-		if (not vars.dead) or (vars.dead and vars.jumping) then
-			vars.player_x += sin(vars.player_rotation) * vars.player_speed
-			vars.player_y -= cos(vars.player_rotation) * vars.player_speed
+	end
+	while vars.ufos < vars.target_ufos do
+		randx = random(2, 25)
+		randy = random(2, 25)
+		if vars.map[(randx)+((randy-1)*25)] == 0 and vars.map[(randx+1)+((randy-1)*25)] == 0 and vars.map[(randx-1)+((randy-1)*25)] == 0 and vars.map[(randx)+((randy)*25)] == 0 and vars.map[(randx)+((randy-2)*25)] == 0 and vars.map[(randx+1)+((randy)*25)] == 0 and vars.map[(randx-1)+((randy)*25)] == 0 and vars.map[(randx+1)+((randy-2)*25)] == 0 and vars.map[(randx-1)+((randy-2)*25)] == 0 then
+			vars.map[randx+((randy-1)*25)] = 5
+			vars.ufos += 1
+			table.insert(vars.items_x, randx)
+			table.insert(vars.items_y, randy)
+			table.insert(vars.ufoindex, randx)
 		end
-		vars.player_x %= 2500
-		vars.player_y %= 2500
-		vars.player_tile_x = ceil((vars.player_x  -25) / 100)
-		vars.player_tile_y = ceil((vars.player_y  -25) / 100)
-		vars.player_tile = vars.player_tile_x * vars.player_tile_y
-		self:moveTo(100, 110 - vars.jump.value)
+	end
+	for i = 1, vars.ufos do
+		vars['ufotimer_' .. vars.ufoindex[i]] = pd.timer.new(1, 0, 0)
+		vars['ufotimer_' .. vars.ufoindex[i]].discardOnCompletion = false
 	end
 
-
-	class('moon', _, classes).extends(gfx.sprite)
-	function classes.moon:init()
-		classes.moon.super.init(self)
-		self:setSize(200, 120)
-		self:setZIndex(0)
-		self:setCenter(0.5, 1)
-		self:moveTo(100, 120)
-		self:add()
-	end
-	function classes.moon:update()
-		self:markDirty()
-	end
-	function classes.moon:draw()
+	gfx.sprite.setBackgroundDrawingCallback(function(x, y, width, height)
 		local c = cos(vars.camera_rotation)
 		local s = sin(vars.camera_rotation)
 		local dxx = c / 2
@@ -228,14 +276,27 @@ function game:init(...)
 		local dyy = c / 2
 		local dx = vars.player_x / 100
 		local dy = vars.player_y / 100
+		-- local dxx2 = c
+		-- local dyx2 = s
+		-- local dxy2 = -s
+		-- local dyy2 = c
+		-- local dx2 = vars.player_x / 2500
+		-- local dy2 = vars.player_y / 2500
 		local p = 100 -- "perspective"
 		local t = 53 + (vars.jump.value/4) -- "tilt"
 		local z = 50 + (vars.jump.value/2)
 		local h = 120 - z
-		assets.backplate:draw(0, 0 + (vars.jump.value/2))
-		assets.stars_small:draw(-deg(vars.camera_rotation)/1.1 % -400, -70)
-		assets.stars_large:draw(-deg(vars.camera_rotation) % -400, -70)
-		assets.surface:drawSampled(0, z, 200, h, 0.5, 0.92, dxx, dyx, dxy, dyy, dx, dy, p, t, true)
+		assets.backplate:draw(0 + (vars.trick_lerp / 2), 0 + (vars.jump.value/2))
+		assets.stars_small:draw(-deg(vars.camera_rotation)/1.1 % -200 + (vars.trick_lerp / 2), -70 + (vars.jump.value / 3))
+		assets.stars_large:draw(-deg(vars.camera_rotation) % -200 + (vars.trick_lerp / 2), -70 + (vars.jump.value / 3))
+		assets.surface:drawSampled(0 + (vars.trick_lerp / 2), z, 200, h, 0.5, 0.92, dxx, dyx, dxy, dyy, dx, dy, p, t, true)
+		-- assets.test:drawSampled(0 + (vars.trick_lerp / 2), z, 200, h, 0.5, 0.92, dxx2, dyx2, dxy2, dyy2, dx2, dy2, p, t, true)
+		if save.radar then
+			gfx.setColor(gfx.kColorWhite)
+			gfx.setDitherPattern(0.5, gfx.image.kDitherTypeBayer2x2)
+			gfx.drawLine(0 + (vars.trick_lerp / 2), 46 + ((vars.jump.value//4) * 2), 200 + (vars.trick_lerp / 2), 46 + ((vars.jump.value//4) * 2))
+			gfx.setColor(gfx.kColorBlack)
+		end
 		game:drawitems(0, 0)
 		if vars.player_tile_x <= 5 then
 			game:drawitems(2500, 0)
@@ -256,35 +317,178 @@ function game:init(...)
 		elseif vars.player_tile_x <= 20 and vars.player_tile_y <= 20 then
 			game:drawitems(-2500, -2500)
 		end
-		game:adjust(gfx.getWorkingImage())
-		assets.dark_side:draw(0, 0 + (vars.jump.value/2))
-		gfx.setImageDrawMode(gfx.kDrawModeFillWhite)
-		assets.pedallica:drawText(vars.score, 5, 5)
-		if vars.trick_done ~= '' then
-			assets.bitmore:drawText(text(vars.trick_done), 5, 35)
+		game:adjust(gfx.getWorkingImage(), false)
+		assets.dark_side:draw(0 + (vars.trick_lerp / 2), 0 + (vars.jump.value/2))
+		if vars.show_moon then
+			if vars.daily then
+				assets.bitmore:drawTextAligned(text('moon') .. vars.gmttime.year .. '-' .. format("%02d", vars.gmttime.month) .. '-' .. format("%02d", vars.gmttime.day), 100 + (vars.trick_lerp / 2), 5, kTextAlignment.center)
+			else
+				assets.bitmore:drawTextAligned(text('moon') .. vars.planet, 100 + (vars.trick_lerp / 2), 5, kTextAlignment.center)
+			end
 		end
+		if vars.combo > 1 then
+			assets.cutout:drawText('©'  .. commalize(vars.combo), max(assets.pedallica:getTextWidth(commalize(vars.score)) - 11, 2), 5)
+		end
+		if vars.overlay ~= '' then
+			assets.cutout:drawTextAligned(text(vars.overlay), 100 + (vars.trick_lerp / 2), 40, kTextAlignment.center)
+		end
+		gfx.setImageDrawMode(gfx.kDrawModeFillWhite)
+		assets.pedallica:drawText(commalize(vars.score), 5, 5)
 		gfx.setImageDrawMode(gfx.kDrawModeCopy)
-		assets.cutout:drawText('x'  .. vars.combo, assets.pedallica:getTextWidth(vars.score) + 10, -1)
-		gfx.setLineWidth(1)
-		gfx.setColor(gfx.kColorWhite)
-		gfx.drawRect(5, 27, 50, 5)
-		gfx.fillRect(7, 29, 46 * vars.combo_timer.value, 1)
-		gfx.setColor(gfx.kColorBlack)
-		gfx.setLineWidth(2)
-		assets.o2[floor(1 + ((33 - 1) / (0 - vars.o2_start)) * (vars.o2.value - vars.o2_start))]:draw(167, 0)
+		if vars.combo_timer.value > 0 and not vars.combo_timer.paused then
+			gfx.setLineWidth(1)
+			gfx.setColor(gfx.kColorWhite)
+			gfx.drawRect(5, 30, 50, 5)
+			gfx.fillRect(7, 32, 46 * vars.combo_timer.value, 1)
+			gfx.setColor(gfx.kColorBlack)
+			gfx.setLineWidth(2)
+		end
+		assets.o2[floor(1 + ((33 - 1) / (0 - vars.o2_start)) * (vars.o2.value - vars.o2_start))]:draw(167 + vars.trick_lerp, 0)
+	end)
+
+	class('player', _, classes).extends(gfx.sprite)
+	function classes.player:init()
+		classes.player.super.init(self)
+		self:setZIndex(1)
+		self:setCenter(0.5, 1)
+		self:setImage(assets.skater[1])
+		self:moveTo(100, 110)
+		self:add()
+	end
+	function classes.player:update()
+		local change = pd.getCrankChange()
+		if vars.jumping then
+			if not save.spin_camera then
+				local rotation = (vars.crank % 360)
+				if (rotation > -45 and rotation <= 45) or (rotation > 315 and rotation <= 405) then
+					self:setImage(assets.skater[11])
+				elseif rotation > 45 and rotation <= 135 then
+					self:setImage(assets.skater[14])
+				elseif rotation > 135 and rotation <= 225 then
+					self:setImage(assets.skater[13])
+				elseif rotation > 225 and rotation <= 315 then
+					self:setImage(assets.skater[12])
+				end
+			else
+				self:setImage(assets.skater[11])
+			end
+		elseif vars.dead then
+			self:setImage(assets.skater[15])
+		else
+			if change >= 4 then
+				if floor(vars.flash.value) >= 2 then
+					self:setImage(assets.skater[9])
+				else
+					self:setImage(assets.skater[10])
+				end
+			elseif change >= 2 then
+				if floor(vars.flash.value) >= 2 then
+					self:setImage(assets.skater[7])
+				else
+					self:setImage(assets.skater[8])
+				end
+			elseif change <= -4 then
+				if floor(vars.flash.value) >= 2 then
+					self:setImage(assets.skater[5])
+				else
+					self:setImage(assets.skater[6])
+				end
+			elseif change <= -2 then
+				if floor(vars.flash.value) >= 2 then
+					self:setImage(assets.skater[3])
+				else
+					self:setImage(assets.skater[4])
+				end
+			else
+				if floor(vars.flash.value) >= 2 then
+					self:setImage(assets.skater[1])
+				else
+					self:setImage(assets.skater[2])
+				end
+			end
+		end
+		if vars.crashed then
+			if floor(vars.flash.value) >= 2 then
+				self:setVisible(false)
+			else
+				self:setVisible(true)
+			end
+		end
+		if vars.eligible_to_win then
+			if floor(vars.flash.value) >= 2 then
+				self:setImageDrawMode(gfx.kDrawModeInverted)
+			else
+				self:setImageDrawMode(gfx.kDrawModeCopy)
+			end
+		end
+		vars.crank += change
+		if (vars.origin >= vars.crank + 30 or vars.origin <= vars.crank - 30) and show_crank then
+			show_crank = false
+		end
+		if not vars.dead then
+			if not vars.jumping or (vars.jumping and save.spin_camera) and not vars.won then
+				vars.crank2 += change
+				vars.camera_rotation += (rad(vars.crank2) - vars.camera_rotation) * 0.25
+			end
+			if not vars.jumping and not vars.won then
+				vars.player_rotation += (vars.camera_rotation - vars.player_rotation) * 0.25
+			end
+		end
+		vars.player_x += sin(vars.player_rotation) * vars.player_speed
+		vars.player_y -= cos(vars.player_rotation) * vars.player_speed
+		if vars.dead and not vars.jumping then
+			vars.player_speed += (0 - vars.player_speed) * 0.1
+		end
+		vars.player_x %= 2500
+		vars.player_y %= 2500
+		vars.player_tile_x = ceil((vars.player_x) / 100)
+		vars.player_tile_y = ceil((vars.player_y) / 100)
+		self:moveTo(100 + (vars.trick_lerp / 2), 110 - vars.jump.value)
 	end
 
-	sprites.moon = classes.moon()
+	class('trick', _, classes).extends(gfx.sprite)
+	function classes.trick:init()
+		classes.trick.super.init(self)
+		self:setSize(105, 120)
+		self:setCenter(1, 0)
+		self:moveTo(200, 0)
+		self:setZIndex(2)
+		self:add()
+	end
+	function classes.trick:update()
+		self:moveTo(300 + vars.trick_lerp + ((vars.trick_lerp / 20) + 5), 0)
+	end
+	function classes.trick:draw()
+		assets.trick[floor(vars.trick_overlay.value)]:draw(0, 0)
+		gfx.setColor(gfx.kColorWhite)
+		gfx.setDitherPattern(0.8, gfx.image.kDitherTypeBayer4x4)
+		gfx.fillRect(5, 120, 100, -(vars.trick_cooldown.value * 120))
+		gfx.setColor(gfx.kColorBlack)
+		assets.trickster[floor(vars.trickster_timer.value)]:draw(0, 0)
+		if vars.trick_done ~= '' then
+			assets.bitmore:drawText(text(vars.trick_done), 16, 2)
+		end
+	end
+
 	sprites.player = classes.player()
+	sprites.trick = classes.trick()
 	newmusic('audio/music/game', true)
 	self:add()
 end
 
-function game:adjust(workingimage)
-	for i = 0, 10 do
-		local rand = random(8, 10)
-		gfx.setClipRect((i^3/13) - rand, 0, 200 + (rand*2) - (i^3/13*2), 150)
-		workingimage:draw(0, 40-(i*2))
+function game:adjust(workingimage, wobble)
+	if save.perf then
+		for i = 0, 10 do
+			local rand = wobble and random(8, 10) or 10
+			gfx.setClipRect((i^3/13) - rand + (vars.trick_lerp / 2), 0, 200 + (rand*2) - (i^3/13*2), 150)
+			workingimage:draw(0, 20-(i*2))
+		end
+	else
+		for i = 0, 20 do
+			local rand = wobble and random(8, 10) or 10
+			gfx.setClipRect((i^3/103) - rand + (vars.trick_lerp / 2), 0, 200 + (rand*2 - (i^3/103*2)), 150)
+			workingimage:draw(0, 20-(i))
+		end
 	end
 	gfx.clearClipRect()
 end
@@ -297,7 +501,7 @@ function game:drawitems(offx, offy)
 	local c = cos(-vars.camera_rotation)
 	local s = sin(-vars.camera_rotation)
 	local c2 = cos(-vars.camera_rotation + 0.785)
-	local s2 = sin(-vars.camera_rotation + 0.785)
+	local s2 = sin(-vars.camera_rotation - 0.785)
 	local xstart = 0
 	local xend = 0
 	local xdir = 0
@@ -305,130 +509,244 @@ function game:drawitems(offx, offy)
 	local yend = 0
 	local ydir = 0
 	if abs(c2) == c2 then
-		xstart = player_tile_x + 5 + (offx / 100)
-		xend = player_tile_x - 5 + (offx / 100)
+		xstart = #vars.items_x
+		xend = 1
 		xdir = -1
 	else
-		xstart = player_tile_x - 5 + (offx / 100)
-		xend = player_tile_x + 5 + (offx / 100)
+		xstart = 1
+		xend = #vars.items_x
 		xdir = 1
 	end
 	if abs(s2) == s2 then
-		ystart = player_tile_y + 5 + (offy / 100)
-		yend = player_tile_y - 5 + (offy / 100)
+		ystart = #vars.items_y
+		yend = 1
 		ydir = -1
 	else
-		ystart = player_tile_y - 5 + (offy / 100)
-		yend = player_tile_y + 5 + (offy / 100)
+		ystart = 1
+		yend = #vars.items_y
 		ydir = 1
 	end
 	for i = xstart, xend, xdir do
 		for n = ystart, yend, ydir do
-			i %= 25
-			n %= 25
-			if i == 0 then i = 25 end
-			if n == 0 then n = 25 end
-			if vars.map[i * n] == 1 then
-				local offsetx = (i * 100) - player_x
-				local offsety = (n * 100) - player_y
-				local x = 100 + (c*offsetx - s*offsety) * 2
-				local y = 110 + (s*offsetx + c*offsety) * 2
-				local yadjust = min(max((y/60)+23, 1), 30)
-				if yadjust > 1 then
-					assets.crater[floor(yadjust)]:draw((x-100)/5, 0 + (vars.jump.value/2))
-				end
-				if vars.player_tile == i*n and not vars.jumping and not vars.dead then
-					if vars.eligible_to_win then
-						vars.jumping = true
-						vars.won = true
-						assets.roll:stop()
-						vars.combo_timer:pause()
-						if save.sfx then
-							assets.slide:play()
-							assets.take:play()
-						end
-						vars.jump:resetnew(1500, vars.jump.value, 200)
-						fademusic(2000)
-						pd.timer.performAfterDelay(2750, function()
-							scenemanager:switchscene(interstition, vars.total_score, vars.planet, vars.best_combo)
-						end)
-					else
-						vars.jumping = true
-						vars.trick_button_queue = ''
-						vars.trick_crank = 0
-						vars.trick_done = ''
-						vars.tricks_done = 0
-						vars.combo_timer:pause()
-						if save.sfx then assets.take:play() end
-						assets.roll:stop()
-						if not vars.crashed then
-							vars.player_speed *= 0.75
-						end
-						vars.jump:resetnew(2000, vars.jump.value, 50, pd.easingFunctions.outCirc)
-						pd.timer.performAfterDelay(2000, function()
-							vars.jump:resetnew(1500, vars.jump.value, 0, pd.easingFunctions.inCirc)
-							pd.timer.performAfterDelay(1500, function()
-								if save.sfx then
-									assets.land:play()
-									assets.roll:play(0)
-								end
-								vars.jumping = false
-								vars.trick_done = ''
-								vars.tricks_done = 0
-								if vars.dead then
-									if save.sfx then assets.crash:play() end
-									assets.roll:stop()
-									fademusic(900)
-									pd.timer.performAfterDelay(1000, function()
-										scenemanager:irissceneout(gameover, vars.total_score, vars.planet, vars.best_combo)
-									end)
-								else
-									vars.combo += 1
-									vars.combo_timer:resetnew(5000, 1, 0)
-									vars.player_rotation = vars.camera_rotation
-									if not vars.crashed then
-										vars.player_start_speed *= 1.1
-										vars.player_speed = vars.player_start_speed
-									end
-								end
+			local xi = vars.items_x[i]
+			local yn = vars.items_y[n]
+			if (xi <= player_tile_x + 10 + (offx / 100) and xi >= player_tile_x - 10 + (offx / 100)) and (yn >= player_tile_y - 10 + (offy / 100) and yn <= player_tile_y + 10 + (offy / 100)) then
+				if vars.map[xi+((yn-1)*25)] == 1 then
+					local offsetx = (xi * 100) - player_x - 33
+					local offsety = (yn * 100) - player_y - 33
+					local x = 100 + (c*offsetx - s*offsety) * 2
+					local y = 110 + (s*offsetx + c*offsety) * 2
+					local yadjust = min(((y/60)+22.5) * 2, 60)
+					if yadjust > 1 then
+						assets.crater[floor(yadjust)]:draw(((x-100)/5) + (vars.trick_lerp / 2), 0 + (vars.jump.value/2))
+					elseif save.radar then
+						assets.radar_crater:draw((x/5)+70 + (vars.trick_lerp / 2), 20 + (vars.jump.value/2))
+					end
+					if vars.player_tile_x == xi and vars.player_tile_y == yn and not vars.jumping and not vars.dead then
+						if vars.eligible_to_win then
+							vars.jumping = true
+							vars.won = true
+							vars.overlay = ''
+							assets.roll:stop()
+							vars.combo_timer:pause()
+							if save.sfx then
+								assets.slide:play()
+								assets.take:play()
+							end
+							vars.jump:resetnew(1500, vars.jump.value, 200, pd.easingFunctions.outSine)
+							fademusic(2000)
+							pd.timer.performAfterDelay(2750, function()
+								scenemanager:irissceneout(interstition, vars.total_score, vars.planet, vars.best_combo)
 							end)
+						else
+							vars.jumping = true
+							vars.trick_slide = -100
+							vars.trick_button_queue = ''
+							vars.trick_crank = 0
+							vars.trick_done = ''
+							vars.overlay = ''
+							vars.tricks_done = 0
+							vars.combo_timer:pause()
+							if save.sfx then assets.take:play() end
+							assets.roll:stop()
+							if not vars.crashed then
+								vars.player_speed *= 0.75
+							end
+							vars.jump:resetnew(2000, vars.jump.value, 50, pd.easingFunctions.outCirc)
+							pd.timer.performAfterDelay(2000, function()
+								vars.jump:resetnew(1500, vars.jump.value, 0, pd.easingFunctions.inCirc)
+								pd.timer.performAfterDelay(1500, function()
+									if save.sfx then
+										assets.land:play()
+										assets.roll:play(0)
+									end
+									vars.jumping = false
+									vars.trick_slide = 0
+									vars.trick_done = ''
+									vars.tricks_done = 0
+									if vars.dead then
+										if save.sfx then assets.crash:play() end
+										assets.roll:stop()
+										fademusic(900)
+										pd.timer.performAfterDelay(1000, function()
+											if vars.daily then
+												scenemanager:irissceneout(dailyorbit, vars.total_score, vars.best_combo)
+											else
+												scenemanager:irissceneout(gameover, vars.total_score, vars.planet, vars.best_combo)
+											end
+										end)
+									else
+										vars.player_speed = vars.player_start_speed
+										if vars.trick_cooldown.timeLeft > 0 then
+											if vars.eligible_to_win then
+												vars.overlay = 'escape'
+												pd.timer.performAfterDelay(2000, function()
+													if vars.overlay == 'escape' then
+														vars.overlay = ''
+													end
+												end)
+											else
+												vars.overlay = tostring('bad' .. math.random(1, 10))
+												pd.timer.performAfterDelay(1000, function()
+													if vars.overlay:find('^bad') ~= nil then
+														vars.overlay = ''
+													end
+												end)
+											end
+											if save.sfx then assets.crash:play() end
+											vars.crashed = true
+											vars.player_speed /= 2
+											shakies()
+											shakies_y()
+											vars.combo_timer:resetnew(1, 0, 0)
+											pd.timer.performAfterDelay(2000, function()
+												vars.crashed = false
+												vars.player_speed *= 2
+												sprites.player:setVisible(true)
+											end)
+										else
+											if vars.eligible_to_win then
+												vars.overlay = 'escape'
+											else
+												vars.overlay = tostring('good' .. math.random(1, 10))
+												pd.timer.performAfterDelay(1000, function()
+													if vars.overlay:find('^good') ~= nil then
+														vars.overlay = ''
+													end
+												end)
+											end
+											vars.combo += 1
+											if vars.combo > vars.best_combo then vars.best_combo = vars.combo end
+											vars.combo_timer:resetnew(5000, 1, 0)
+											vars.player_rotation = vars.camera_rotation
+											if not vars.crashed then
+												vars.player_start_speed *= 1.05
+												vars.player_speed = vars.player_start_speed
+											end
+										end
+									end
+								end)
+							end)
+						end
+					end
+				elseif vars.map[xi+((yn-1)*25)] == 2 then
+					local offsetx = (xi * 100) - player_x - 39
+					local offsety = (yn * 100) - player_y - 39
+					local x = 100 + (c*offsetx - s*offsety) * 2
+					local y = 110 + (s*offsetx + c*offsety) * 2
+					local yadjust = min(((y/60)+24) * 2, 60)
+					if yadjust > 1 then
+						assets.o22[floor(yadjust)]:draw((x-100)/5 + (vars.trick_lerp / 2), 0 + (vars.jump.value/2))
+					elseif save.radar then
+						assets.radar_o2:draw((x/5)+70 + (vars.trick_lerp / 2), 20 + (vars.jump.value/2))
+					end
+					if vars.player_tile_x == xi and vars.player_tile_y == yn and not vars.jumping and not vars.dead then
+						vars.map[xi+((yn-1)*25)] = 0
+						vars.ufos -= 1
+						if save.sfx then assets.select:play() end
+						vars.overlay = 'moreo2'
+						pd.timer.performAfterDelay(1000, function()
+							if vars.overlay == 'moreo2' then
+								vars.overlay = ''
+							end
+						end)
+						vars.o2:resetnew(min(vars.o2.value * 1.5, vars.o2_start), min(vars.o2.value * 1.5, vars.o2_start), 0)
+					end
+				elseif vars.map[xi+((yn-1)*25)] == 3 then
+					local offsetx = (xi * 100) - player_x - 33
+					local offsety = (yn * 100) - player_y - 33
+					local x = 100 + (c*offsetx - s*offsety) * 2
+					local y = 110 + (s*offsetx + c*offsety) * 2
+					local yadjust = min(((y/80)+23) * 2, 60)
+					if yadjust > 1 then
+						assets.rover[floor(yadjust)]:draw(((x-100)/5) + (vars.trick_lerp / 2), 0 + (vars.jump.value/2))
+					elseif save.radar then
+						assets.radar_rover:draw((x/5)+70 + (vars.trick_lerp / 2), 20 + (vars.jump.value/2))
+					end
+					if vars.player_tile_x == xi and vars.player_tile_y == yn and not vars.crashed and not vars.jumping and not vars.dead then
+						if save.sfx then assets.crash:play() end
+						vars.crashed = true
+						vars.player_speed = vars.player_start_speed / 2
+						shakies()
+						shakies_y()
+						vars.combo_timer:resetnew(1, 0, 0)
+						pd.timer.performAfterDelay(2000, function()
+							vars.crashed = false
+							vars.player_speed = vars.player_start_speed
+							sprites.player:setVisible(true)
 						end)
 					end
-				end
-			elseif vars.map[i * n] == 2 then
-				local offsetx = (i * 100) - player_x
-				local offsety = (n * 100) - player_y
-				local x = 100 + (c*offsetx - s*offsety) * 2
-				local y = 110 + (s*offsetx + c*offsety) * 2
-				local yadjust = min(max((y/60)+24, 1), 30)
-				if yadjust > 1 then
-					assets.o22[floor(yadjust)]:draw((x-100)/5, 0 + (vars.jump.value/2))
-				end
-				if vars.player_tile == i*n and not vars.jumping and not vars.dead then
-					vars.map[i * n] = 0
-					if save.sfx then assets.select:play() end
-					vars.o2:resetnew(min(vars.o2.value * 1.2, vars.o2_start), min(vars.o2.value * 1.2, vars.o2_start), 0)
-				end
-			elseif vars.map[i * n] == 3 then
-				local offsetx = (i * 100) - player_x
-				local offsety = (n * 100) - player_y
-				local x = 100 + (c*offsetx - s*offsety) * 2
-				local y = 110 + (s*offsetx + c*offsety) * 2
-				local yadjust = min(max((y/60)+23, 1), 30)
-				if yadjust > 1 then
-					assets.rover[floor(yadjust)]:draw((x-100)/5, 0 + (vars.jump.value/2))
-				end
-				if vars.player_tile == i*n and not vars.crashed and not vars.jumping and not vars.dead then
-					if save.sfx then assets.crash:play() end
-					vars.crashed = true
-					vars.player_speed /= 2
-					shakies()
-					shakies_y()
-					pd.timer.performAfterDelay(2000, function()
-						vars.crashed = false
-						vars.player_speed *= 2
-						sprites.player:setVisible(true)
-					end)
+				elseif vars.map[xi+((yn-1)*25)] == 4 then
+					local offsetx = (xi * 100) - player_x - 33
+					local offsety = (yn * 100) - player_y - 33
+					local x = 100 + (c*offsetx - s*offsety) * 2
+					local y = 110 + (s*offsetx + c*offsety) * 2
+					local yadjust = min(((y/60)+24) * 2, 60)
+					if yadjust > 1 then
+						assets.flag[floor(yadjust)]:draw((x-100)/5 + (vars.trick_lerp / 2), 0 + (vars.jump.value/2))
+					end
+					if vars.player_tile_x == xi and vars.player_tile_y == yn and not vars.crashed and not vars.jumping and not vars.dead then
+						vars.map[xi+((yn-1)*25)] = 0
+						if save.sfx then assets.select:play() end
+						vars.overlay = 'what'
+						pd.timer.performAfterDelay(1000, function()
+							if vars.overlay == 'what' then
+								vars.overlay = ''
+							end
+						end)
+						save.flags += 1
+						vars.flags -= 1
+					end
+				elseif vars.map[xi+((yn-1)*25)] == 5 then
+					local offsetx = (xi * 100) - player_x - 33
+					local offsety = (yn * 100) - player_y - 33
+					local x = 100 + (c*offsetx - s*offsety) * 2
+					local y = 110 + (s*offsetx + c*offsety) * 2
+					local yadjust = min(((y/60)+22) * 2, 60)
+					if yadjust > 1 then
+						if vars['ufotimer_' .. xi].timeLeft > 0 then
+							assets.ufo[math.min(floor(yadjust), 23 * 2)]:draw((x-100)/5 + (vars.trick_lerp / 2), 0 + (vars.jump.value/2) + vars['ufotimer_' .. xi].value)
+						else
+							assets.ufo[floor(yadjust)]:draw((x-100)/5 + (vars.trick_lerp / 2), 0 + (vars.jump.value/2))
+						end
+					end
+					if vars.player_tile_x == xi and vars.player_tile_y == yn and not vars.crashed and not vars.jumping and not vars.dead then
+						if vars['ufotimer_' .. xi].timeLeft == 0 then
+							if save.sfx then assets.aufo:play() end
+							vars['ufotimer_' .. xi]:resetnew(500, 0, -200, pd.easingFunctions.inSine)
+							vars.score += 3000
+							vars.total_score += 3000
+							vars.overlay = 'duuude'
+							pd.timer.performAfterDelay(1000, function()
+								if vars.overlay == 'duuude' then
+									vars.overlay = ''
+								end
+							end)
+							pd.timer.performAfterDelay(490, function()
+								vars.map[xi+((yn-1)*25)] = 0
+							end)
+						end
+					end
 				end
 			end
 		end
@@ -436,7 +754,8 @@ function game:drawitems(offx, offy)
 end
 
 function game:update()
-	if vars.jumping and not vars.won then
+	vars.trick_lerp += (vars.trick_slide - vars.trick_lerp) * 0.4
+	if vars.jumping and not vars.won and not vars.dead and vars.trick_cooldown.timeLeft == 0 then
 		if pd.buttonJustPressed('up') then
 			vars.trick_button_queue = 'up'
 		end
@@ -450,38 +769,127 @@ function game:update()
 			vars.trick_button_queue = 'right'
 		end
 		vars.trick_crank += pd.getCrankChange()
-		if abs(vars.trick_crank) > 360 then
+		if vars.trick_crank > 360 then
 			if pd.buttonIsPressed('up') then
-				vars.trick_done = 'impossible'
+				vars.trickster_timer:resetnew(400, 5.01, 8.99)
+				vars.trick_done = 'rebound'
 				vars.score += 500 * vars.combo
+				vars.total_score += 500 * vars.combo
+				vars.trick_cooldown:resetnew(500, 1, 0)
 			elseif pd.buttonIsPressed('down') then
-				vars.trick_done = '360shoveit'
+				vars.trickster_timer:resetnew(400, 9.01, 12.99)
+				vars.trick_done = 'spinturn'
 				vars.score += 600 * vars.combo
+				vars.total_score += 600 * vars.combo
+				vars.trick_cooldown:resetnew(600, 1, 0)
 			elseif pd.buttonIsPressed('left') then
-				vars.trick_done = 'doublekickflip'
+				vars.trickster_timer:resetnew(400, 13.01, 16.99)
+				vars.trick_done = 'widdershin'
 				vars.score += 800 * vars.combo
+				vars.total_score += 800 * vars.combo
+				vars.trick_cooldown:resetnew(600, 1, 0)
 			elseif pd.buttonIsPressed('right') then
-				vars.trick_done = 'doubleheelflip'
+				vars.trickster_timer:resetnew(400, 17.01, 20.99)
+				vars.trick_done = 'clocky'
 				vars.score += 700 * vars.combo
+				vars.total_score += 700 * vars.combo
+				vars.trick_cooldown:resetnew(700, 1, 0)
 			else
 				if vars.trick_button_queue == 'up' then
-					vars.trick_done = 'airwalk'
+					vars.trickster_timer:resetnew(400, 21.01, 24.99)
+					vars.trick_done = 'takeoff'
 					vars.score += 1000 * vars.combo
+					vars.total_score += 1000 * vars.combo
+					vars.trick_cooldown:resetnew(750, 1, 0)
 				elseif vars.trick_button_queue == 'down' then
-					vars.trick_done = '360varial'
+					vars.trickster_timer:resetnew(400, 25.01, 28.99)
+					vars.trick_done = 'weeble'
 					vars.score += 900 * vars.combo
+					vars.total_score += 900 * vars.combo
+					vars.trick_cooldown:resetnew(750, 1, 0)
 				elseif vars.trick_button_queue == 'left' then
-					vars.trick_done = '360pivot'
+					vars.trickster_timer:resetnew(400, 29.01, 32.99)
+					vars.trick_done = 'highroad'
 					vars.score += 1100 * vars.combo
+					vars.total_score += 1100 * vars.combo
+					vars.trick_cooldown:resetnew(750, 1, 0)
 				elseif vars.trick_button_queue == 'right' then
-					vars.trick_done = '360fingerflip'
+					vars.trickster_timer:resetnew(400, 33.01, 36.99)
+					vars.trick_done = 'snapflip'
 					vars.score += 1050 * vars.combo
+					vars.total_score += 1050 * vars.combo
+					vars.trick_cooldown:resetnew(750, 1, 0)
 				else
+					vars.trickster_timer:resetnew(400, 37.01, 40.99)
 					vars.trick_done = '360'
 					vars.score += 300 * vars.combo
+					vars.total_score += 300 * vars.combo
+					vars.trick_cooldown:resetnew(300, 1, 0)
 				end
 			end
-			if save.sfx then assets.hit:play(1, 1 + (vars.tricks_done * 0.1)) end
+			if save.sfx then assets.hit:play(1, 1 + (vars.tricks_done * 0.2)) end
+			vars.tricks_done += 1
+			vars.trick_crank = 0
+			vars.trick_button_queue = ''
+		elseif vars.trick_crank < -360 then
+			if pd.buttonIsPressed('up') then
+				vars.trickster_timer:resetnew(400, 5.01, 8.99)
+				vars.trick_done = 'reverserebound'
+				vars.score += 600 * vars.combo
+				vars.total_score += 600 * vars.combo
+				vars.trick_cooldown:resetnew(600, 1, 0)
+			elseif pd.buttonIsPressed('down') then
+				vars.trickster_timer:resetnew(400, 9.01, 12.99)
+				vars.trick_done = 'reversespinturn'
+				vars.score += 700 * vars.combo
+				vars.total_score += 700 * vars.combo
+				vars.trick_cooldown:resetnew(700, 1, 0)
+			elseif pd.buttonIsPressed('left') then
+				vars.trickster_timer:resetnew(400, 13.01, 16.99)
+				vars.trick_done = 'reversewiddershin'
+				vars.score += 900 * vars.combo
+				vars.total_score += 900 * vars.combo
+				vars.trick_cooldown:resetnew(750, 1, 0)
+			elseif pd.buttonIsPressed('right') then
+				vars.trickster_timer:resetnew(400, 17.01, 20.99)
+				vars.trick_done = 'reverseclocky'
+				vars.score += 800 * vars.combo
+				vars.total_score += 800 * vars.combo
+				vars.trick_cooldown:resetnew(750, 1, 0)
+			else
+				if vars.trick_button_queue == 'up' then
+					vars.trickster_timer:resetnew(400, 21.01, 24.99)
+					vars.trick_done = 'reversetakeoff'
+					vars.score += 1100 * vars.combo
+					vars.total_score += 1100 * vars.combo
+					vars.trick_cooldown:resetnew(750, 1, 0)
+				elseif vars.trick_button_queue == 'down' then
+					vars.trickster_timer:resetnew(400, 25.01, 28.99)
+					vars.trick_done = 'reverseweeble'
+					vars.score += 1000 * vars.combo
+					vars.total_score += 1000 * vars.combo
+					vars.trick_cooldown:resetnew(750, 1, 0)
+				elseif vars.trick_button_queue == 'left' then
+					vars.trickster_timer:resetnew(400, 29.01, 32.99)
+					vars.trick_done = 'reversehighroad'
+					vars.score += 1200 * vars.combo
+					vars.total_score += 1200 * vars.combo
+					vars.trick_cooldown:resetnew(750, 1, 0)
+				elseif vars.trick_button_queue == 'right' then
+					vars.trickster_timer:resetnew(400, 33.01, 36.99)
+					vars.trick_done = 'reversesnapflip'
+					vars.score += 1150 * vars.combo
+					vars.total_score += 1150 * vars.combo
+					vars.trick_cooldown:resetnew(750, 1, 0)
+				else
+					vars.trickster_timer:resetnew(400, 37.01, 40.99)
+					vars.trick_done = 'reverse360'
+					vars.score += 400 * vars.combo
+					vars.total_score += 400 * vars.combo
+					vars.trick_cooldown:resetnew(400, 1, 0)
+				end
+			end
+			if save.sfx then assets.hit:play(1, 1 + (vars.tricks_done * 0.2)) end
 			vars.tricks_done += 1
 			vars.trick_crank = 0
 			vars.trick_button_queue = ''
@@ -559,9 +967,11 @@ function game:update()
 			assets.beep:play()
 		end
 	end
-	if vars.score > vars.point_threshold and not vars.eligible_to_win then
+	if vars.score > vars.point_threshold and not vars.eligible_to_win and not vars.daily then
 		vars.eligible_to_win = true
 		if save.sfx then assets.powerup:play() end
+		stopmusic()
+		newmusic('audio/music/escape', true, 1.596)
 	end
 	vars.oldo2 = vars.o2.value
 end
