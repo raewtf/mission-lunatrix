@@ -1,7 +1,7 @@
 achievementData = {
 	cardPath = "images/system/banner",
 	iconPath = "images/system/icon",
-	keyedAchievements = {"runs10", "runs25", "runs50", "runs100", "points10000", "points50000", "points100000", "points500000", "lifetime100000", "lifetime500000", "lifetime1000000", "lifetime10000000", "moon", "moons5", "moons10", "moons25", "daily", "flag", "flags25", "flags50", "flags100"},
+	keyedAchievements = {"runs10", "runs25", "runs50", "runs100", "points10000", "points50000", "points100000", "points500000", "lifetime100000", "lifetime500000", "lifetime1000000", "lifetime10000000", "moon", "moons5", "moons10", "moons25", "daily", "flag", "flags25", "flags50", "flags100", "ufo"},
 	achievements = {
 		{
 			id = "runs10",
@@ -184,6 +184,13 @@ achievementData = {
 			isSecret = true,
 			progressMax = 100,
 			progressIsPercentage = true,
+			scoreValue = 0,
+		},
+		{
+			id = "ufo",
+			name = "Duuude.",
+			description = "Spot a UFO",
+			isSecret = true,
 			scoreValue = 0,
 		},
 	}

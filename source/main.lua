@@ -47,12 +47,14 @@ function savecheck()
 	if save.perf == nil then save.perf = false end
 	if save.radar == nil then save.radar = true end
 	save.flags = save.flags or 0
+	save.ufos = save.ufos or 0
 	if save.lastdaily == nil then save.lastdaily = {} end
 	save.lastdaily.year = save.lastdaily.year or 0
 	save.lastdaily.month = save.lastdaily.month or 0
 	save.lastdaily.day = save.lastdaily.day or 0
 	save.lastdaily.score = save.lastdaily.score or 0
 	if save.lastdaily.sent == nil then save.lastdaily.sent = false end
+	save.avatar = save.avatar or 11
 end
 
 title_memorize = 'newgame'
@@ -84,6 +86,7 @@ function updatecheevos()
 	achievements.advanceTo('flags25', save.flags)
 	achievements.advanceTo('flags50', save.flags)
 	achievements.advanceTo('flags100', save.flags)
+	if save.ufos > 0 then achievements.grant('ufo') end
 
 	achievements.save()
 end
@@ -184,6 +187,21 @@ function commalize(amount)
   return formatted
 end
 
+-- This function returns the inputted number, with the ordinal suffix tacked on at the end (as a string)
+function ordinal(num)
+	local m10 = num % 10 -- This is the number, modulo'd by 10.
+	local m100 = num % 100 -- This is the number, modulo'd by 100.
+	if m10 == 1 and m100 ~= 11 then -- If the number ends in 1 but NOT 11...
+		return tostring(num) .. gfx.getLocalizedText("st") -- add "st" on.
+	elseif m10 == 2 and m100 ~= 12 then -- If the number ends in 2 but NOT 12...
+		return tostring(num) .. gfx.getLocalizedText("nd") -- add "nd" on,
+	elseif m10 == 3 and m100 ~= 13 then -- and if the number ends in 3 but NOT 13...
+		return tostring(num) .. gfx.getLocalizedText("rd") -- add "rd" on.
+	else -- If all those checks passed us by,
+		return tostring(num) .. gfx.getLocalizedText("th") -- then it ends in "th".
+	end
+end
+
 -- This function shakes the screen. int is a number representing intensity. time is a number representing duration
 function shakies(time, int)
 	if pd.getReduceFlashing() or perf then -- If reduce flashing is enabled, then don't shake.
@@ -216,4 +234,5 @@ function pd.update()
 	if show_crank then -- If the variable allows for it...
 		pd.ui.crankIndicator:draw(0, 0) -- Show the Use the Crank! indicator.
 	end
+	pd.drawFPS(5, 5)
 end

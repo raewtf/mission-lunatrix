@@ -6,6 +6,8 @@
 
 (source/audio/sfx) SFX sourced from Pixabay, under [their license](https://pixabay.com/service/terms/)
 
+(source/audio/sfx/vo) Tubular V/O provided by Jordan Carroll, under [CC0](https://creativecommons.org/public-domain/cc0/)
+
 The rest of the code made by rae, except where noted.
 
 MIT License

@@ -74,9 +74,21 @@ function gameover:init(...)
 
 	pd.datastore.write(save)
 
+	if catalog then
+		pd.scoreboards.addScore('arcade', (save.avatar < 11 and vars.score + save.avatar) or (vars.score), function(status, result)
+			if pd.isSimulator == 1 then
+				printTable(status)
+				printTable(result)
+			end
+		end)
+	end
+
 	gfx.sprite.setBackgroundDrawingCallback(function(x, y, width, height)
 		assets.stars_s:draw(vars.stars_s.value, 0)
 		assets.stars_l:draw(vars.stars_l.value, 0)
+		gfx.setDitherPattern(0.25, gfx.image.kDitherTypeBayer2x2)
+		gfx.fillRect(0, 0, 400, 240)
+		gfx.setColor(gfx.kColorBlack)
 		assets.cutout:drawTextAligned(text('gameover'), 125, 10, kTextAlignment.center)
 		assets.gameover:draw(245, 25 + vars.float.value)
 		gfx.setImageDrawMode(gfx.kDrawModeFillWhite)

@@ -3,6 +3,7 @@ import 'options'
 import 'credits'
 import 'howtoplay'
 import 'scoreboards'
+import 'avatar'
 
 -- Setting up consts
 local pd <const> = playdate
@@ -48,6 +49,8 @@ function title:init(...)
 		select = smp.new('audio/sfx/select'),
 		back = smp.new('audio/sfx/back'),
 		flag = gfx.image.new('images/flag'),
+		avatar_select = gfx.image.new('images/avatar_select'),
+		avatar = gfx.imagetable.new('images/avatar'),
 	}
 
 	vars = {
@@ -57,6 +60,7 @@ function title:init(...)
 		daily_orbitable = false,
 		stars_s = pd.timer.new(25000, 0, -400),
 		stars_l = pd.timer.new(20000, 0, -400),
+		avatar = pd.timer.new(500, -4, 0, pd.easingFunctions.outSine),
 	}
 	vars.titleHandlers = {
 		upButtonDown = function()
@@ -130,12 +134,16 @@ function title:init(...)
 			elseif vars.selections[vars.selection] == "scoreboards" then
 				title_memorize = 'scoreboards'
 				if save.sfx then assets.select:play() end
-				scenemanager:transitionscene(scoreboards)
+				scenemanager:transitionscene(scoreboards, 'arcade')
 			elseif vars.selections[vars.selection] == "options" then
 				title_memorize = 'options'
 				if save.sfx then assets.select:play() end
 				scenemanager:transitionscene(options)
 			end
+		end,
+
+		BButtonDown = function()
+			scenemanager:transitionscene(avatar)
 		end,
 	}
 	pd.timer.performAfterDelay(scenemanager.transitiontime + 100, function()
@@ -166,6 +174,7 @@ function title:init(...)
 
 	vars.stars_s.repeats = true
 	vars.stars_l.repeats = true
+	vars.avatar.repeats = true
 
 	gfx.sprite.setBackgroundDrawingCallback(function(x, y, width, height)
 		assets.stars_s:draw(vars.stars_s.value, 0)
@@ -216,8 +225,13 @@ function title:init(...)
 			end
 		end
 		assets.moon:draw(0, 196)
-		assets.pedallica:drawText(text('copyright'), 23, 217 + vars.metadatay)
-		assets.pedallica:drawTextAligned('v' .. pd.metadata.version, 377, 217 + vars.metadatay, kTextAlignment.right)
+		assets.pedallica:drawText(text('copyright') .. ' - v' .. pd.metadata.version, 23, 217 + vars.metadatay)
+		assets.avatar_select:draw(346, 207 + vars.metadatay)
+		assets.avatar[save.avatar]:draw(373, 212 + vars.metadatay)
+		if save.avatar == 11 then
+			assets.avatar_select:draw(346, 207 + vars.metadatay + vars.avatar.value)
+			assets.avatar[save.avatar]:draw(373, 212 + vars.metadatay + vars.avatar.value)
+		end
 	end)
 
 	newmusic('audio/music/title', true, 1.591)
@@ -235,7 +249,10 @@ function title:update()
 		vars['selectionx' .. i] += (vars['selectiontarget' .. i] - vars['selectionx' .. i]) * 0.5
 	end
 	vars.metadatay += (vars.metadatatarget - vars.metadatay) * 0.5
-	local ticks = pd.getCrankTicks(4)
+	local ticks = 0
+	if not scenemanager.transitioning then
+		ticks = pd.getCrankTicks(4)
+	end
 	if ticks ~= 0 and vars.selection > 0 then
 		vars.selection += ticks
 		if vars.selection < 1 then

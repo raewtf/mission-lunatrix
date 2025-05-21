@@ -157,7 +157,10 @@ function options:update()
 	for i = 1, #vars.selections do
 		vars['selectionx' .. i] += (vars['selectiontarget' .. i] - vars['selectionx' .. i]) * 0.5
 	end
-	local ticks = pd.getCrankTicks(4)
+	local ticks = 0
+	if not scenemanager.transitioning then
+		ticks = pd.getCrankTicks(4)
+	end
 	if ticks ~= 0 and vars.selection > 0 then
 		vars.selection += ticks
 		if vars.selection < 1 then

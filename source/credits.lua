@@ -27,11 +27,14 @@ function credits:init(...)
 	assets = {
 		cutout = gfx.font.new('fonts/cutout'),
 		pedallica = gfx.font.new('fonts/pedallica'),
-		credits = gfx.image.new('images/credits'),
 		back = smp.new('audio/sfx/back'),
+		stars_s = gfx.image.new('images/stars_s'),
+		stars_l = gfx.image.new('images/stars_l'),
 	}
 
 	vars = {
+		stars_s = pd.timer.new(25000, 0, -400),
+		stars_l = pd.timer.new(20000, 0, -400),
 	}
 	vars.creditsHandlers = {
 		BButtonDown = function()
@@ -43,10 +46,19 @@ function credits:init(...)
 		pd.inputHandlers.push(vars.creditsHandlers)
 	end)
 
+	vars.stars_s.repeats = true
+	vars.stars_l.repeats = true
+
 	gfx.sprite.setBackgroundDrawingCallback(function(x, y, width, height)
-		assets.credits:draw(0, 0)
+		assets.stars_s:draw(vars.stars_s.value, 0)
+		assets.stars_l:draw(vars.stars_l.value, 0)
+		gfx.setDitherPattern(0.25, gfx.image.kDitherTypeBayer2x2)
+		gfx.fillRect(0, 0, 400, 240)
+		gfx.setColor(gfx.kColorBlack)
 		assets.cutout:drawTextAligned(text('credits'), 200, 10, kTextAlignment.center)
-		assets.pedallica:drawTextAligned(text('fullcredits'), 200, 60, kTextAlignment.center)
+		gfx.setImageDrawMode(gfx.kDrawModeFillWhite)
+		assets.pedallica:drawTextAligned(text('fullcredits'), 200, 50, kTextAlignment.center)
+		gfx.setImageDrawMode(gfx.kDrawModeCopy)
 	end)
 
 	self:add()
