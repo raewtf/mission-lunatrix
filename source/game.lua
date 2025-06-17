@@ -47,11 +47,11 @@ function game:init(...)
 			gfx.setLineWidth(2)
 		end
 		if vars.daily then
-			assets.bitmore:drawText(text('hash') .. vars.gmttime.year .. '-' .. format("%02d", vars.gmttime.month) .. '-' .. format("%02d", vars.gmttime.day) .. '\n' .. text('moony_start_' .. ((vars.seed % 50) + 1)) .. '\n' .. text('moony_end_' .. ceil((vars.seed % 125) / 2.5)), 4, 60)
+			assets.bitmore:drawText(text('hash') .. vars.gmttime.year .. '-' .. format("%02d", vars.gmttime.month) .. '-' .. format("%02d", vars.gmttime.day) .. '\n' .. text('moony_start_' .. ((vars.seed % 50) + 1)) .. '\n' .. text('moony_end_' .. ceil((vars.seed % 125) / 2.5)), 4, 62)
 		else
 			assets.bitmore:drawText(text('hash') .. vars.planet .. ' - ' .. text('moony_start_' .. ((vars.seed % 50) + 1)) .. '\n' .. text('moony_end_' .. ceil((vars.seed % 125) / 2.5)), 4, 75)
 		end
-		assets.bitmore:drawText(text('total') .. vars.total_score .. text('pts'), 4, 104)
+		assets.bitmore:drawText(text('total') .. vars.total_score, 4, 104)
 		assets.o2[floor(1 + ((33 - 1) / (0 - vars.o2_start)) * (vars.o2.value - vars.o2_start))]:draw(100 - 33, 0)
 		--pause_img:drawScaled(0, 0, 2)
 		gfx.popContext()
@@ -997,26 +997,26 @@ function game:update()
 			vars.trick_button_queue = ''
 		end
 	end
-	if vars.oldo2 > 20000 and vars.o2.value < 20000 then self:beep(0.1) end
-	if vars.oldo2 > 19000 and vars.o2.value < 19000 then self:beep(0.2) end
-	if vars.oldo2 > 18000 and vars.o2.value < 18000 then self:beep(0.3) end
-	if vars.oldo2 > 17000 and vars.o2.value < 17000 then self:beep(0.4) end
-	if vars.oldo2 > 16000 and vars.o2.value < 16000 then self:beep(0.5) end
-	if vars.oldo2 > 15000 and vars.o2.value < 15000 then self:beep(0.6) end
-	if vars.oldo2 > 14000 and vars.o2.value < 14000 then self:beep(0.7) end
-	if vars.oldo2 > 13000 and vars.o2.value < 13000 then self:beep(0.8) end
-	if vars.oldo2 > 12000 and vars.o2.value < 12000 then self:beep(0.9) end
-	if vars.oldo2 > 11000 and vars.o2.value < 11000 then self:beep(1) end
-	if vars.oldo2 > 10000 and vars.o2.value < 10000 then self:beep(1) end
-	if vars.oldo2 > 9000 and vars.o2.value < 9000 then self:beep(1) end
-	if vars.oldo2 > 8000 and vars.o2.value < 8000 then self:beep(1) end
-	if vars.oldo2 > 7000 and vars.o2.value < 7000 then self:beep(1) end
-	if vars.oldo2 > 6000 and vars.o2.value < 6000 then self:beep(1) end
-	if vars.oldo2 > 5000 and vars.o2.value < 5000 then self:beep(1) end
-	if vars.oldo2 > 4000 and vars.o2.value < 4000 then self:beep(1) end
-	if vars.oldo2 > 3000 and vars.o2.value < 3000 then self:beep(1) end
-	if vars.oldo2 > 2000 and vars.o2.value < 2000 then self:beep(1) end
-	if vars.oldo2 > 1000 and vars.o2.value < 1000 then self:beep(1) end
+	if vars.oldo2 > 20000 and vars.o2.value <= 20000 then self:beep(0.1) end
+	if vars.oldo2 > 19000 and vars.o2.value <= 19000 then self:beep(0.2) end
+	if vars.oldo2 > 18000 and vars.o2.value <= 18000 then self:beep(0.3) end
+	if vars.oldo2 > 17000 and vars.o2.value <= 17000 then self:beep(0.4) end
+	if vars.oldo2 > 16000 and vars.o2.value <= 16000 then self:beep(0.5) end
+	if vars.oldo2 > 15000 and vars.o2.value <= 15000 then self:beep(0.6) end
+	if vars.oldo2 > 14000 and vars.o2.value <= 14000 then self:beep(0.7) end
+	if vars.oldo2 > 13000 and vars.o2.value <= 13000 then self:beep(0.8) end
+	if vars.oldo2 > 12000 and vars.o2.value <= 12000 then self:beep(0.9) end
+	if vars.oldo2 > 11000 and vars.o2.value <= 11000 then self:beep(1) end
+	if vars.oldo2 > 10000 and vars.o2.value <= 10000 then self:beep(1) end
+	if vars.oldo2 > 9000 and vars.o2.value <= 9000 then self:beep(1) end
+	if vars.oldo2 > 8000 and vars.o2.value <= 8000 then self:beep(1) end
+	if vars.oldo2 > 7000 and vars.o2.value <= 7000 then self:beep(1) end
+	if vars.oldo2 > 6000 and vars.o2.value <= 6000 then self:beep(1) end
+	if vars.oldo2 > 5000 and vars.o2.value <= 5000 then self:beep(1) end
+	if vars.oldo2 > 4000 and vars.o2.value <= 4000 then self:beep(1) end
+	if vars.oldo2 > 3000 and vars.o2.value <= 3000 then self:beep(1) end
+	if vars.oldo2 > 2000 and vars.o2.value <= 2000 then self:beep(1) end
+	if vars.oldo2 > 1000 and vars.o2.value <= 1000 then self:beep(1) end
 	if vars.score > vars.point_threshold and not vars.eligible_to_win and not vars.daily then
 		vars.eligible_to_win = true
 		if save.sfx then assets.powerup:play() end
