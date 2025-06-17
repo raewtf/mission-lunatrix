@@ -16,6 +16,7 @@ function credits:init(...)
 	function pd.gameWillPause() -- When the game's paused...
 		local menu = pd.getSystemMenu()
 		menu:removeAllMenuItems()
+		pd.setMenuImage(nil)
 		if not scenemanager.transitioning then
 			menu:addMenuItem(text('back'), function()
 				scenemanager:transitionscene(title)

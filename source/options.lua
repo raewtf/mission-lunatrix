@@ -16,6 +16,7 @@ function options:init(...)
 	function pd.gameWillPause() -- When the game's paused...
 		local menu = pd.getSystemMenu()
 		menu:removeAllMenuItems()
+		pd.setMenuImage(nil)
 		if not scenemanager.transitioning then
 			menu:addMenuItem(text('back'), function()
 				scenemanager:transitionscene(title)
@@ -36,7 +37,7 @@ function options:init(...)
 
 	vars = {
 		selection = 1,
-		selections = {'music', 'sfx', 'perf', 'spin_camera'},
+		selections = {'music', 'sfx', 'perf', 'spin_camera', 'skip_interstition'},
 	}
 	vars.optionsHandlers = {
 		upButtonDown = function()
@@ -103,6 +104,8 @@ function options:init(...)
 				save.perf = not save.perf
 			elseif vars.selections[vars.selection] == "spin_camera" then
 				save.spin_camera = not save.spin_camera
+			elseif vars.selections[vars.selection] == "skip_interstition" then
+				save.skip_interstition = not save.skip_interstition
 			end
 			if save.sfx then assets.select:play() end
 		end,
@@ -141,12 +144,17 @@ function options:init(...)
 		else
 			assets.cutout:drawText(text('spin_cameraoff'), 23 + vars.selectionx4, 135)
 		end
-		gfx.setImageDrawMode(gfx.kDrawModeFillWhite)
-		assets.pedallica:drawText(text('bestscore') .. commalize(save.score) .. text('pts'), 23, 185)
-		assets.pedallica:drawText(text('lifetimescore') .. commalize(save.lifetime_score) .. text('pts'), 23, 205)
-		assets.pedallica:drawTextAligned(text('mostmoons') .. commalize(save.highest_planet), 377, 185, kTextAlignment.right)
-		assets.pedallica:drawTextAligned(text('totalruns') .. commalize(save.arcade_runs), 377, 205, kTextAlignment.right)
-		gfx.setImageDrawMode(gfx.kDrawModeCopy)
+		if save.skip_interstition then
+			assets.cutout:drawText(text('skip_interstitionon'), 23 + vars.selectionx5, 165)
+		else
+			assets.cutout:drawText(text('skip_interstitionoff'), 23 + vars.selectionx5, 165)
+		end
+		--gfx.setImageDrawMode(gfx.kDrawModeFillWhite)
+		--assets.pedallica:drawText(text('bestscore') .. commalize(save.score) .. text('pts'), 23, 185)
+		--assets.pedallica:drawText(text('lifetimescore') .. commalize(save.lifetime_score) .. text('pts'), 23, 205)
+		--assets.pedallica:drawTextAligned(text('mostmoons') .. commalize(save.highest_planet), 377, 185, kTextAlignment.right)
+		--assets.pedallica:drawTextAligned(text('totalruns') .. commalize(save.arcade_runs), 377, 205, kTextAlignment.right)
+		--gfx.setImageDrawMode(gfx.kDrawModeCopy)
 	end)
 
 	pd.getCrankTicks(4)

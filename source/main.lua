@@ -54,7 +54,9 @@ function savecheck()
 	save.lastdaily.day = save.lastdaily.day or 0
 	save.lastdaily.score = save.lastdaily.score or 0
 	if save.lastdaily.sent == nil then save.lastdaily.sent = false end
+	if save.skipinterstition == nil then save.skipinterstition = false end
 	save.avatar = save.avatar or 11
+	if save.seenhowtoplay == nil then save.seenhowtoplay = false end
 end
 
 title_memorize = 'newgame'
@@ -234,5 +236,5 @@ function pd.update()
 	if show_crank then -- If the variable allows for it...
 		pd.ui.crankIndicator:draw(0, 0) -- Show the Use the Crank! indicator.
 	end
-	pd.drawFPS(5, 5)
+	--pd.drawFPS(5, 35)
 end

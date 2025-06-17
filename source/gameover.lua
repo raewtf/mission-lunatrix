@@ -15,6 +15,7 @@ function gameover:init(...)
 	function pd.gameWillPause() -- When the game's paused...
 		local menu = pd.getSystemMenu()
 		menu:removeAllMenuItems()
+		pd.setMenuImage(nil)
 		if not scenemanager.transitioning then
 			menu:addMenuItem(text('retry'), function()
 				scenemanager:iris(game)
@@ -30,6 +31,7 @@ function gameover:init(...)
 	assets = {
 		cutout = gfx.font.new('fonts/cutout'),
 		pedallica = gfx.font.new('fonts/pedallica'),
+		bitmoreoutline2x = gfx.font.new('fonts/bitmoreoutline2x'),
 		gameover = gfx.image.new('images/gameover'),
 		stars_s = gfx.image.new('images/stars_s'),
 		stars_l = gfx.image.new('images/stars_l'),
@@ -88,16 +90,22 @@ function gameover:init(...)
 		assets.stars_l:draw(vars.stars_l.value, 0)
 		gfx.setDitherPattern(0.25, gfx.image.kDitherTypeBayer2x2)
 		gfx.fillRect(0, 0, 400, 240)
+		gfx.setColor(gfx.kColorWhite)
+		gfx.setDitherPattern(0.75, gfx.image.kDitherTypeBayer2x2)
+		gfx.fillRect(0, 128, 400, 59)
 		gfx.setColor(gfx.kColorBlack)
 		assets.cutout:drawTextAligned(text('gameover'), 125, 10, kTextAlignment.center)
-		assets.gameover:draw(245, 25 + vars.float.value)
+		assets.gameover:draw(245, 35 + vars.float.value)
 		gfx.setImageDrawMode(gfx.kDrawModeFillWhite)
-		assets.pedallica:drawTextAligned(text('totalscore') .. commalize(vars.score) .. text('pts'), 125, 70, kTextAlignment.center)
-		assets.pedallica:drawTextAligned(text('moonsseen') .. commalize(vars.highest_planet), 125, 90, kTextAlignment.center)
-		assets.pedallica:drawTextAligned(text('bestcombo') .. commalize(vars.best_combo), 125, 110, kTextAlignment.center)
-		assets.pedallica:drawTextAligned(text('pressA'), 125, 150, kTextAlignment.center)
-		assets.pedallica:drawTextAligned(text('pressB'), 125, 170, kTextAlignment.center)
+		assets.pedallica:drawText(text('totalscore'), 30, 50)
+		assets.pedallica:drawTextAligned(commalize(vars.score) .. text('pts'), 220, 50, kTextAlignment.right)
+		assets.pedallica:drawText(text('moonsseen'), 30, 70)
+		assets.pedallica:drawTextAligned(commalize(vars.highest_planet) .. (vars.highest_planet == 1 and text('smoon') or text('smoons')), 220, 70, kTextAlignment.right)
+		assets.pedallica:drawText(text('bestcombo'), 30, 90)
+		assets.pedallica:drawTextAligned(commalize(vars.best_combo) .. text('x'), 220, 90, kTextAlignment.right)
 		gfx.setImageDrawMode(gfx.kDrawModeCopy)
+		assets.bitmoreoutline2x:drawTextAligned(text('pressA'), 125, 134, kTextAlignment.center)
+		assets.bitmoreoutline2x:drawTextAligned(text('pressB'), 125, 160, kTextAlignment.center)
 	end)
 
 	newmusic('audio/music/gameover', false)

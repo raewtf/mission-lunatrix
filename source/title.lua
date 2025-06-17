@@ -23,6 +23,7 @@ function title:init(...)
 	function pd.gameWillPause() -- When the game's paused...
 		local menu = pd.getSystemMenu()
 		menu:removeAllMenuItems()
+		pd.setMenuImage(nil)
 		if not scenemanager.transitioning then
 			menu:addMenuItem(text('howtoplay'), function()
 				if save.sfx then assets.select:play() end
@@ -51,6 +52,7 @@ function title:init(...)
 		flag = gfx.image.new('images/flag'),
 		avatar_select = gfx.image.new('images/avatar_select'),
 		avatar = gfx.imagetable.new('images/avatar'),
+		cta = gfx.image.new('images/cta'),
 	}
 
 	vars = {
@@ -229,8 +231,14 @@ function title:init(...)
 		assets.avatar_select:draw(346, 207 + vars.metadatay)
 		assets.avatar[save.avatar]:draw(373, 212 + vars.metadatay)
 		if save.avatar == 11 then
-			assets.avatar_select:draw(346, 207 + vars.metadatay + vars.avatar.value)
-			assets.avatar[save.avatar]:draw(373, 212 + vars.metadatay + vars.avatar.value)
+			assets.avatar_select:draw(346, ((207 + vars.metadatay + vars.avatar.value) // 2) * 2)
+			assets.avatar[save.avatar]:draw(373, ((212 + vars.metadatay + vars.avatar.value) // 2) * 2)
+		end
+		if not save.seenhowtoplay then
+			assets.cta:draw(240 + (vars.metadatay * 4.5), 30)
+			gfx.setImageDrawMode(gfx.kDrawModeFillWhite)
+			assets.pedallica:drawTextAligned(text('cta'), 311 + (vars.metadatay * 4.5), 38, kTextAlignment.center)
+			gfx.setImageDrawMode(gfx.kDrawModeCopy)
 		end
 	end)
 

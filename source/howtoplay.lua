@@ -16,6 +16,7 @@ function howtoplay:init(...)
 	function pd.gameWillPause() -- When the game's paused...
 		local menu = pd.getSystemMenu()
 		menu:removeAllMenuItems()
+		pd.setMenuImage(nil)
 		if not scenemanager.transitioning then
 			menu:addMenuItem(text('back'), function()
 				scenemanager:transitionscene(title)
@@ -39,7 +40,7 @@ function howtoplay:init(...)
 		stars_s = pd.timer.new(25000, 0, -400),
 		stars_l = pd.timer.new(20000, 0, -400),
 		selection = 1,
-		selections = 6,
+		selections = 5,
 	}
 	vars.howtoplayHandlers = {
 		leftButtonDown = function()
@@ -100,12 +101,10 @@ function howtoplay:init(...)
 		assets.pedallica:drawText('<' .. vars.selection .. '/' .. vars.selections .. '>', 10, 215)
 		assets.pedallica:drawTextAligned(text('howtoplays' .. vars.selection), 390, 215, kTextAlignment.right)
 		assets.pedallica:drawText(text('howtoplay' .. vars.selection), 10, 40)
-		if vars.selection == 5 then
-			assets.pedallica:drawTextAligned(text('howtoplay' .. vars.selection .. 'r'), 390, 40, kTextAlignment.right)
-		end
 		gfx.setImageDrawMode(gfx.kDrawModeCopy)
 	end)
 
 	newmusic('audio/music/gameover', false)
 	self:add()
+	save.seenhowtoplay = true
 end

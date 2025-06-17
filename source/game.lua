@@ -18,6 +18,7 @@ local ceil <const> = math.ceil
 local min <const> = math.min
 local max <const> = math.max
 local format <const> = string.format
+local find <const> = string.find
 
 class('game').extends(gfx.sprite) -- Create the scene's class
 function game:init(...)
@@ -29,6 +30,32 @@ function game:init(...)
 	show_crank = true
 
 	function pd.gameWillPause() -- When the game's paused...
+		local pause_img = gfx.image.new(200, 120, gfx.kColorBlack)
+		gfx.pushContext(pause_img)
+		if vars.combo > 1 then
+			assets.cutout:drawText('©'  .. commalize(vars.combo), max(assets.pedallica:getTextWidth(commalize(vars.score)) - 11, 2), 4)
+		end
+		gfx.setImageDrawMode(gfx.kDrawModeFillWhite)
+		assets.pedallica:drawText(commalize(vars.score), 5, 5)
+		gfx.setImageDrawMode(gfx.kDrawModeCopy)
+		if vars.combo_timer.value > 0 then
+			gfx.setLineWidth(1)
+			gfx.setColor(gfx.kColorWhite)
+			gfx.drawRect(5, 30, 50, 5)
+			gfx.fillRect(7, 32, 46 * vars.combo_timer.value, 1)
+			gfx.setColor(gfx.kColorBlack)
+			gfx.setLineWidth(2)
+		end
+		if vars.daily then
+			assets.bitmore:drawText(text('hash') .. vars.gmttime.year .. '-' .. format("%02d", vars.gmttime.month) .. '-' .. format("%02d", vars.gmttime.day) .. '\n' .. text('moony_start_' .. ((vars.seed % 50) + 1)) .. '\n' .. text('moony_end_' .. ceil((vars.seed % 125) / 2.5)), 4, 60)
+		else
+			assets.bitmore:drawText(text('hash') .. vars.planet .. ' - ' .. text('moony_start_' .. ((vars.seed % 50) + 1)) .. '\n' .. text('moony_end_' .. ceil((vars.seed % 125) / 2.5)), 4, 75)
+		end
+		assets.bitmore:drawText(text('total') .. vars.total_score .. text('pts'), 4, 104)
+		assets.o2[floor(1 + ((33 - 1) / (0 - vars.o2_start)) * (vars.o2.value - vars.o2_start))]:draw(100 - 33, 0)
+		--pause_img:drawScaled(0, 0, 2)
+		gfx.popContext()
+		pd.setMenuImage(pause_img:scaledImage(2))
 		local menu = pd.getSystemMenu()
 		menu:removeAllMenuItems()
 		if not scenemanager.transitioning and not vars.dead and not vars.won then
@@ -99,7 +126,12 @@ function game:init(...)
 		moreo2 = smp.new('audio/sfx/vo/moreo2'),
 		duuude = smp.new('audio/sfx/vo/duuude'),
 		what = smp.new('audio/sfx/vo/what'),
+		escape = smp.new('audio/sfx/vo/escape'),
+		burst_l = gfx.imagetable.new('images/burst_l'),
+		burst_r = gfx.imagetable.new('images/burst_r'),
 	}
+
+	gfx.setFont(assets.bitmore)
 
 	vars = {
 		total_score = args[1] or 0,
@@ -124,8 +156,8 @@ function game:init(...)
 		minijumping = false,
 		trick_button_queue = '',
 		trick_crank = 0,
-		trick_done = '',
 		tricks_done = 0,
+		trick_stack = '',
 		overlay = '',
 		eligible_to_win = false,
 		trick_overlay = pd.timer.new(300, 1.01, 4.99),
@@ -136,9 +168,11 @@ function game:init(...)
 		crank2 = pd.getCrankPosition(),
 		origin = pd.getCrankPosition(),
 		crater = pd.timer.new(2000, 1, 30),
+		seed = 0,
 		flash = pd.timer.new(250, 2.99, 1),
 		trick_cooldown = pd.timer.new(1, 0, 0),
 		trickster_timer = pd.timer.new(500, 1.01, 4.99),
+		burst = pd.timer.new(0, 7, 7),
 		map = {
 			0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
 			0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
@@ -171,7 +205,7 @@ function game:init(...)
 		point = pd.geometry.point.new(0, 0),
 	}
 	vars.gameHandlers = {
-		AButtonDown = function()
+		upButtonDown = function()
 			if not vars.minijumping and not vars.dead and not vars.jumping and not vars.crashed and not vars.won then
 				vars.minijumping = true
 				if save.sfx then assets.take:play() end
@@ -179,10 +213,10 @@ function game:init(...)
 				if not vars.crashed then
 					vars.player_speed *= 0.75
 				end
-				vars.jump:resetnew(500, vars.jump.value, 30, pd.easingFunctions.outCirc)
-				pd.timer.performAfterDelay(500, function()
-					vars.jump:resetnew(400, vars.jump.value, 0, pd.easingFunctions.inCirc)
-					pd.timer.performAfterDelay(400, function()
+				vars.jump:resetnew(vars.jump_base * 0.25, vars.jump.value, 30, pd.easingFunctions.outCirc)
+				pd.timer.performAfterDelay(vars.jump_base * 0.25, function()
+					vars.jump:resetnew(vars.jump_base * 0.2, vars.jump.value, 0, pd.easingFunctions.inCirc)
+					pd.timer.performAfterDelay(vars.jump_base * 0.2, function()
 						if save.spin_camera then
 							vars.player_rotation = vars.camera_rotation
 						end
@@ -192,16 +226,7 @@ function game:init(...)
 						end
 						vars.minijumping = false
 						if vars.dead then
-							if save.sfx then assets.crash:play() end
-							assets.roll:stop()
-							fademusic(900)
-							pd.timer.performAfterDelay(1000, function()
-								if vars.daily then
-									scenemanager:irissceneout(dailyorbit, vars.total_score, vars.best_combo)
-								else
-									scenemanager:irissceneout(gameover, vars.total_score, vars.planet, vars.best_combo)
-								end
-							end)
+							game:die()
 						else
 							vars.player_speed = vars.player_start_speed
 						end
@@ -209,20 +234,14 @@ function game:init(...)
 				end)
 			end
 		end,
-
-		BButtonDown = function()
-
-		end,
 	}
 	pd.inputHandlers.push(vars.gameHandlers)
 
-	vars.crater.repeats = true
+	vars.burst.discardOnCompletion = false
 	vars.jump.discardOnCompletion = false
 	vars.flash.repeats = true
-	vars.player_start_speed = 8
-	vars.player_speed = 8
 	vars.point_threshold = 8000 + (vars.planet * 1000)
-	vars.o2_start = max(110000 - (vars.planet * 2000), 20000)
+	vars.o2_start = max(70000 - (vars.planet * 3000), 20000)
 	vars.o2 = pd.timer.new(vars.o2_start, vars.o2_start, 0)
 	vars.combo_timer.discardOnCompletion = false
 	vars.trick_cooldown.discardOnCompletion = false
@@ -231,45 +250,51 @@ function game:init(...)
 		vars.trickster_timer:resetnew(500, 1.01, 4.99)
 	end
 	vars.combo_timer.timerEndedCallback = function()
-		if save.sfx and vars.combo ~= 1 then assets.back:play() end
-		vars.combo = 1
+		if vars.combo_timer.value == 0 then
+			if save.sfx and vars.combo ~= 1 then assets.back:play() end
+			vars.combo = 1
+		end
 	end
 	vars.oldo2 = vars.o2_start
 	vars.o2.timerEndedCallback = function() -- die function
 		vars.dead = true
-		if not vars.jumping then
-			if save.sfx then assets.crash:play() end
-			assets.roll:stop()
-			fademusic(900)
-			pd.timer.performAfterDelay(1000, function()
-				if vars.daily then
-					scenemanager:irissceneout(dailyorbit, vars.total_score, vars.best_combo)
-				else
-					scenemanager:irissceneout(gameover, vars.total_score, vars.planet, vars.best_combo)
-				end
-			end)
+		if not vars.jumping and not vars.minijumping then
+			game:die()
 		end
 	end
 	if save.sfx then assets.roll:play(0) end
 
 	if vars.daily then
 		vars.gmttime = pd.getGMTTime()
-		math.randomseed(vars.gmttime.year .. vars.gmttime.month .. vars.gmttime.day)
+		vars.seed = vars.gmttime.year .. vars.gmttime.month .. vars.gmttime.day
 	else
-		math.randomseed(playdate.getSecondsSinceEpoch())
+		vars.seed = playdate.getSecondsSinceEpoch()
 	end
+	math.randomseed(vars.seed)
+
+	vars.player_start_speed = random(7, 10)
+	vars.player_speed = vars.player_start_speed
+	vars.jump_base = math.random(1800, 2200)
 
 	pd.timer.performAfterDelay(3000, function()
 		vars.show_moon = false
 	end)
 
 	vars.target_craters = random(5, 10)
-	if vars.daily then
-		vars.target_o2s = random(4, 7)
+	if math.random(1, 6) < 6 then
+		if vars.daily then
+			vars.target_o2s = random(5, 8)
+		else
+			vars.target_o2s = random(3, 6)
+		end
 	else
-		vars.target_o2s = random(2, 3)
+		vars.target_o2s = 0
 	end
-	vars.target_rovers = random(4, 6)
+	if math.random(1, 2) < 2 then
+		vars.target_rovers = random(4, 6)
+	else
+		vars.target_rovers = 0
+	end
 	vars.target_flags = floor(random(0, 5) / 5)
 	vars.target_ufos = floor(random(0, 10) / 10)
 	vars.craters = 0
@@ -363,6 +388,9 @@ function game:init(...)
 			gfx.setColor(gfx.kColorBlack)
 		end
 		assets.dark_side:draw(0 + (vars.trick_lerp / 2), 0 + (vars.jump.value/2))
+		gfx.setDitherPattern(0.5 + (vars.jump.value / 140), gfx.image.kDitherTypeBayer4x4)
+		gfx.fillEllipseInRect(84 - (vars.jump.value / 8) + (vars.trick_lerp / 2), 100 + (vars.jump.value / 8), 32 + (vars.jump.value / 4), 16 + (vars.jump.value / 8))
+		gfx.setColor(gfx.kColorBlack)
 		game:drawitems(0, 0)
 		if vars.player_tile_x <= 5 then
 			game:drawitems(2500, 0)
@@ -386,23 +414,30 @@ function game:init(...)
 			end
 			game:adjust(gfx.getWorkingImage(), false)
 		end
+		if vars.burst.value < 7 then
+			assets.burst_l[floor(vars.burst.value)]:draw(0, 0)
+			assets.burst_r[floor(vars.burst.value)]:draw(155, 0)
+		end
 		if vars.show_moon then
 			if vars.daily then
-				assets.bitmore:drawTextAligned(text('moon') .. vars.gmttime.year .. '-' .. format("%02d", vars.gmttime.month) .. '-' .. format("%02d", vars.gmttime.day), 100 + (vars.trick_lerp / 2), 5, kTextAlignment.center)
+				assets.bitmore:drawTextAligned(text('moon') .. vars.gmttime.year .. '-' .. format("%02d", vars.gmttime.month) .. '-' .. format("%02d", vars.gmttime.day) .. '\n' .. text('moony_start_' .. ((vars.seed % 50) + 1)) .. text('moony_end_' .. ceil((vars.seed % 125) / 2.5)), 100 + (vars.trick_lerp / 2), 5, kTextAlignment.center)
 			else
-				assets.bitmore:drawTextAligned(text('moon') .. vars.planet, 100 + (vars.trick_lerp / 2), 5, kTextAlignment.center)
+				assets.bitmore:drawTextAligned(text('moon') .. vars.planet .. '\n' .. text('moony_start_' .. ((vars.seed % 50) + 1)) .. text('moony_end_' .. ceil((vars.seed % 125) / 2.5)), 100 + (vars.trick_lerp / 2), 5, kTextAlignment.center)
 			end
 		end
-		if vars.combo > 1 then
-			assets.cutout:drawText('©'  .. commalize(vars.combo), max(assets.pedallica:getTextWidth(commalize(vars.score)) - 11, 2), 5)
-		end
 		if vars.overlay ~= '' then
+			if find(vars.overlay, "bad") then
+				gfx.setImageDrawMode(gfx.kDrawModeInverted)
+			end
 			assets.cutout:drawTextAligned(text(vars.overlay), 100 + (vars.trick_lerp / 2), 40, kTextAlignment.center)
+		end
+		if vars.combo > 1 then
+			assets.cutout:drawText('©'  .. commalize(vars.combo), max(assets.pedallica:getTextWidth(commalize(vars.score)) - 11, 2), 4)
 		end
 		gfx.setImageDrawMode(gfx.kDrawModeFillWhite)
 		assets.pedallica:drawText(commalize(vars.score), 5, 5)
 		gfx.setImageDrawMode(gfx.kDrawModeCopy)
-		if vars.combo_timer.value > 0 and not vars.combo_timer.paused then
+		if vars.combo_timer.value > 0 then
 			gfx.setLineWidth(1)
 			gfx.setColor(gfx.kColorWhite)
 			gfx.drawRect(5, 30, 50, 5)
@@ -410,10 +445,13 @@ function game:init(...)
 			gfx.setColor(gfx.kColorBlack)
 			gfx.setLineWidth(2)
 		end
+		gfx.setColor(gfx.kColorXOR)
+		gfx.fillRect(0, 118, (vars.score / vars.point_threshold) * (200 + vars.trick_lerp), 2)
+		gfx.setColor(gfx.kColorBlack)
 		if not vars.jumping and not vars.dead and not vars.minijumping and not vars.crashed and not vars.won then
-			assets.prompts[3]:draw(4, 98)
+			assets.prompts[1]:draw(4, 97)
 		else
-			assets.prompts[4]:draw(4, 98)
+			assets.prompts[2]:draw(4, 97)
 		end
 		assets.o2[floor(1 + ((33 - 1) / (0 - vars.o2_start)) * (vars.o2.value - vars.o2_start))]:draw(167 + vars.trick_lerp, 0)
 	end)
@@ -504,10 +542,10 @@ function game:init(...)
 		if not vars.dead then
 			if (not vars.jumping or (vars.jumping and save.spin_camera)) and not vars.won and (not vars.minijumping or (vars.minijumping and save.spin_camera)) then
 				vars.crank2 += change
-				vars.camera_rotation += (rad(vars.crank2) - vars.camera_rotation) * 0.25
+				vars.camera_rotation += (rad(vars.crank2) - vars.camera_rotation) * 0.1
 			end
 			if not vars.jumping and not vars.won and not vars.minijumping then
-				vars.player_rotation += (vars.camera_rotation - vars.player_rotation) * 0.25
+				vars.player_rotation += (vars.camera_rotation - vars.player_rotation) * 0.1
 			end
 		end
 		vars.player_x += sin(vars.player_rotation) * vars.player_speed
@@ -540,9 +578,13 @@ function game:init(...)
 		gfx.setDitherPattern(0.8, gfx.image.kDitherTypeBayer4x4)
 		gfx.fillRect(5, 120, 100, -(vars.trick_cooldown.value * 120))
 		gfx.setColor(gfx.kColorBlack)
+		if vars.burst.value < 7 then
+			assets.burst_r[floor(vars.burst.value)]:draw(59, 0)
+		end
 		assets.trickster[floor(vars.trickster_timer.value)]:draw(0, 0)
-		if vars.trick_done ~= '' then
-			assets.bitmore:drawText(text(vars.trick_done), 16, 2)
+		if vars.trick_stack ~= '' then
+			local _, h = gfx.getTextSize(vars.trick_stack)
+			assets.bitmore:drawText(vars.trick_stack, 16, 133 - h)
 		end
 	end
 
@@ -600,50 +642,49 @@ function game:drawitems(offx, offy)
 							vars.jump:resetnew(1500, vars.jump.value, 200, pd.easingFunctions.outSine)
 							fademusic(2000)
 							pd.timer.performAfterDelay(2750, function()
-								scenemanager:irissceneout(interstition, vars.total_score, vars.planet, vars.best_combo)
+								if save.skip_interstition then
+									scenemanager:irisscenetwo(game, vars.total_score, vars.planet + 1, vars.best_combo)
+								else
+									scenemanager:irissceneout(interstition, vars.total_score, vars.planet, vars.best_combo)
+								end
 							end)
 						else
 							vars.jumping = true
 							vars.trick_slide = -100
 							vars.trick_button_queue = ''
 							vars.trick_crank = 0
-							vars.trick_done = ''
 							vars.overlay = ''
 							vars.tricks_done = 0
+							vars.trick_stack = ''
 							vars.combo_timer:pause()
 							if save.sfx then assets.take:play() end
 							assets.roll:stop()
+							if vars.combo_timer.value > 0 then
+								vars.combo_timer:resetnew(500, vars.combo_timer.value, 1)
+							end
 							if not vars.crashed then
 								vars.player_speed *= 0.75
 							end
-							vars.jump:resetnew(2000, vars.jump.value, 50, pd.easingFunctions.outCirc)
-							pd.timer.performAfterDelay(2000, function()
-								vars.jump:resetnew(1500, vars.jump.value, 0, pd.easingFunctions.inCirc)
-								pd.timer.performAfterDelay(1500, function()
+							vars.jump:resetnew(vars.jump_base, vars.jump.value, 50, pd.easingFunctions.outCirc)
+							pd.timer.performAfterDelay(vars.jump_base, function()
+								vars.jump:resetnew(vars.jump_base * 0.75, vars.jump.value, 0, pd.easingFunctions.inCirc)
+								pd.timer.performAfterDelay(vars.jump_base * 0.75, function()
 									if save.sfx then
 										assets.land:play()
 										assets.roll:play(0)
 									end
 									vars.jumping = false
 									vars.trick_slide = 0
-									vars.trick_done = ''
-									vars.tricks_done = 0
+									vars.trick_stack = ''
 									if vars.dead then
-										if save.sfx then assets.crash:play() end
-										assets.roll:stop()
-										fademusic(900)
-										pd.timer.performAfterDelay(1000, function()
-											if vars.daily then
-												scenemanager:irissceneout(dailyorbit, vars.total_score, vars.best_combo)
-											else
-												scenemanager:irissceneout(gameover, vars.total_score, vars.planet, vars.best_combo)
-											end
-										end)
+										game:die()
 									else
 										vars.player_speed = vars.player_start_speed
 										if vars.trick_cooldown.timeLeft > 0 then
 											if vars.eligible_to_win then
 												vars.overlay = 'escape'
+												vars.burst:resetnew(500, 1, 6.99)
+												vars.burst.repeats = true
 												if save.sfx then assets[vars.overlay]:play() end
 												pd.timer.performAfterDelay(2000, function()
 													if vars.overlay == 'escape' then
@@ -673,25 +714,36 @@ function game:drawitems(offx, offy)
 										else
 											if vars.eligible_to_win then
 												vars.overlay = 'escape'
-											else
-												vars.overlay = tostring('good' .. math.random(1, 10))
+												vars.burst:resetnew(500, 1, 6.99)
+												vars.burst.repeats = true
 												if save.sfx then assets[vars.overlay]:play() end
-												pd.timer.performAfterDelay(1000, function()
-													if vars.overlay:find('^good') ~= nil then
+												pd.timer.performAfterDelay(2000, function()
+													if vars.overlay == 'escape' then
 														vars.overlay = ''
 													end
 												end)
+											else
+												if vars.tricks_done > 0 then
+													vars.overlay = tostring('good' .. math.random(1, 10))
+													if save.sfx then assets[vars.overlay]:play() end
+													pd.timer.performAfterDelay(1000, function()
+														if vars.overlay:find('^good') ~= nil then
+															vars.overlay = ''
+														end
+													end)
+												end
 											end
 											vars.combo += 1
 											if vars.combo > vars.best_combo then vars.best_combo = vars.combo end
 											vars.combo_timer:resetnew(5000, 1, 0)
 											vars.player_rotation = vars.camera_rotation
-											if not vars.crashed then
-												vars.player_start_speed *= 1.05
+											if not vars.crashed and vars.tricks_done > 0 then
+												vars.player_start_speed *= 1.1
 												vars.player_speed = vars.player_start_speed
 											end
 										end
 									end
+									vars.tricks_done = 0
 								end)
 							end)
 						end
@@ -725,7 +777,7 @@ function game:drawitems(offx, offy)
 					local offsety = (yn * 100) - player_y - 33
 					local x = 100 + (c*offsetx - s*offsety) * 2
 					local y = 110 + (s*offsetx + c*offsety) * 2
-					local yadjust = min(((y/80)+23) * 2, 60)
+					local yadjust = min(((y/80)+24) * 2, 60)
 					if yadjust > 1 then
 						assets.rover[floor(yadjust)]:draw(((x-100)/5) + (vars.trick_lerp / 2), 0 + (vars.jump.value/2))
 					elseif save.radar and not save.perf then
@@ -740,6 +792,7 @@ function game:drawitems(offx, offy)
 						vars.combo_timer:resetnew(1, 0, 0)
 						pd.timer.performAfterDelay(2000, function()
 							vars.crashed = false
+							vars.player_start_speed /= 1.1
 							vars.player_speed = vars.player_start_speed
 							sprites.player:setVisible(true)
 						end)
@@ -823,201 +876,147 @@ function game:update()
 		if vars.trick_crank > 360 then
 			if pd.buttonIsPressed('up') then
 				vars.trickster_timer:resetnew(400, 5.01, 8.99)
-				vars.trick_done = 'rebound'
+				vars.trick_stack = text('rebound') .. '\n' .. vars.trick_stack
 				vars.score += 500 * vars.combo
 				vars.total_score += 500 * vars.combo
 				vars.trick_cooldown:resetnew(500, 1, 0)
 			elseif pd.buttonIsPressed('down') then
 				vars.trickster_timer:resetnew(400, 9.01, 12.99)
-				vars.trick_done = 'spinturn'
+				vars.trick_stack = text('spinturn') .. '\n' .. vars.trick_stack
 				vars.score += 600 * vars.combo
 				vars.total_score += 600 * vars.combo
 				vars.trick_cooldown:resetnew(600, 1, 0)
 			elseif pd.buttonIsPressed('left') then
 				vars.trickster_timer:resetnew(400, 13.01, 16.99)
-				vars.trick_done = 'widdershin'
+				vars.trick_stack = text('widdershin') .. '\n' .. vars.trick_stack
 				vars.score += 800 * vars.combo
 				vars.total_score += 800 * vars.combo
 				vars.trick_cooldown:resetnew(600, 1, 0)
 			elseif pd.buttonIsPressed('right') then
 				vars.trickster_timer:resetnew(400, 17.01, 20.99)
-				vars.trick_done = 'clocky'
+				vars.trick_stack = text('clocky') .. '\n' .. vars.trick_stack
 				vars.score += 700 * vars.combo
 				vars.total_score += 700 * vars.combo
 				vars.trick_cooldown:resetnew(700, 1, 0)
+			elseif vars.trick_button_queue == 'up' then
+				vars.trickster_timer:resetnew(400, 21.01, 24.99)
+				vars.trick_stack = text('takeoff') .. '\n' .. vars.trick_stack
+				vars.score += 1000 * vars.combo
+				vars.total_score += 1000 * vars.combo
+				vars.trick_cooldown:resetnew(750, 1, 0)
+			elseif vars.trick_button_queue == 'down' then
+				vars.trickster_timer:resetnew(400, 25.01, 28.99)
+				vars.trick_stack = text('weeble') .. '\n' .. vars.trick_stack
+				vars.score += 900 * vars.combo
+				vars.total_score += 900 * vars.combo
+				vars.trick_cooldown:resetnew(750, 1, 0)
+			elseif vars.trick_button_queue == 'left' then
+				vars.trickster_timer:resetnew(400, 29.01, 32.99)
+				vars.trick_stack = text('highroad') .. '\n' .. vars.trick_stack
+				vars.score += 1100 * vars.combo
+				vars.total_score += 1100 * vars.combo
+				vars.trick_cooldown:resetnew(750, 1, 0)
+			elseif vars.trick_button_queue == 'right' then
+				vars.trickster_timer:resetnew(400, 33.01, 36.99)
+				vars.trick_stack = text('snapflip') .. '\n' .. vars.trick_stack
+				vars.score += 1050 * vars.combo
+				vars.total_score += 1050 * vars.combo
+				vars.trick_cooldown:resetnew(750, 1, 0)
 			else
-				if vars.trick_button_queue == 'up' then
-					vars.trickster_timer:resetnew(400, 21.01, 24.99)
-					vars.trick_done = 'takeoff'
-					vars.score += 1000 * vars.combo
-					vars.total_score += 1000 * vars.combo
-					vars.trick_cooldown:resetnew(750, 1, 0)
-				elseif vars.trick_button_queue == 'down' then
-					vars.trickster_timer:resetnew(400, 25.01, 28.99)
-					vars.trick_done = 'weeble'
-					vars.score += 900 * vars.combo
-					vars.total_score += 900 * vars.combo
-					vars.trick_cooldown:resetnew(750, 1, 0)
-				elseif vars.trick_button_queue == 'left' then
-					vars.trickster_timer:resetnew(400, 29.01, 32.99)
-					vars.trick_done = 'highroad'
-					vars.score += 1100 * vars.combo
-					vars.total_score += 1100 * vars.combo
-					vars.trick_cooldown:resetnew(750, 1, 0)
-				elseif vars.trick_button_queue == 'right' then
-					vars.trickster_timer:resetnew(400, 33.01, 36.99)
-					vars.trick_done = 'snapflip'
-					vars.score += 1050 * vars.combo
-					vars.total_score += 1050 * vars.combo
-					vars.trick_cooldown:resetnew(750, 1, 0)
-				else
-					vars.trickster_timer:resetnew(400, 37.01, 40.99)
-					vars.trick_done = '360'
-					vars.score += 300 * vars.combo
-					vars.total_score += 300 * vars.combo
-					vars.trick_cooldown:resetnew(300, 1, 0)
-				end
+				vars.trickster_timer:resetnew(400, 37.01, 40.99)
+				vars.trick_stack = text('360') .. '\n' .. vars.trick_stack
+				vars.score += 300 * vars.combo
+				vars.total_score += 300 * vars.combo
+				vars.trick_cooldown:resetnew(300, 1, 0)
 			end
 			if save.sfx then assets.hit:play(1, 1 + (vars.tricks_done * 0.2)) end
+			vars.burst:resetnew(300, 1, 7)
 			vars.tricks_done += 1
 			vars.trick_crank = 0
 			vars.trick_button_queue = ''
 		elseif vars.trick_crank < -360 then
 			if pd.buttonIsPressed('up') then
 				vars.trickster_timer:resetnew(400, 5.01, 8.99)
-				vars.trick_done = 'reverserebound'
+				vars.trick_stack = text('reverserebound') .. '\n' .. vars.trick_stack
 				vars.score += 600 * vars.combo
 				vars.total_score += 600 * vars.combo
 				vars.trick_cooldown:resetnew(600, 1, 0)
 			elseif pd.buttonIsPressed('down') then
 				vars.trickster_timer:resetnew(400, 9.01, 12.99)
-				vars.trick_done = 'reversespinturn'
+				vars.trick_stack = text('reversespinturn') .. '\n' .. vars.trick_stack
 				vars.score += 700 * vars.combo
 				vars.total_score += 700 * vars.combo
 				vars.trick_cooldown:resetnew(700, 1, 0)
 			elseif pd.buttonIsPressed('left') then
 				vars.trickster_timer:resetnew(400, 13.01, 16.99)
-				vars.trick_done = 'reversewiddershin'
+				vars.trick_stack = text('reversewiddershin') .. '\n' .. vars.trick_stack
 				vars.score += 900 * vars.combo
 				vars.total_score += 900 * vars.combo
 				vars.trick_cooldown:resetnew(750, 1, 0)
 			elseif pd.buttonIsPressed('right') then
 				vars.trickster_timer:resetnew(400, 17.01, 20.99)
-				vars.trick_done = 'reverseclocky'
+				vars.trick_stack = text('reverseclocky') .. '\n' .. vars.trick_stack
 				vars.score += 800 * vars.combo
 				vars.total_score += 800 * vars.combo
 				vars.trick_cooldown:resetnew(750, 1, 0)
+			elseif vars.trick_button_queue == 'up' then
+				vars.trickster_timer:resetnew(400, 21.01, 24.99)
+				vars.trick_stack = text('reversetakeoff') .. '\n' .. vars.trick_stack
+				vars.score += 1100 * vars.combo
+				vars.total_score += 1100 * vars.combo
+				vars.trick_cooldown:resetnew(750, 1, 0)
+			elseif vars.trick_button_queue == 'down' then
+				vars.trickster_timer:resetnew(400, 25.01, 28.99)
+				vars.trick_stack = text('reverseweeble') .. '\n' .. vars.trick_stack
+				vars.score += 1000 * vars.combo
+				vars.total_score += 1000 * vars.combo
+				vars.trick_cooldown:resetnew(750, 1, 0)
+			elseif vars.trick_button_queue == 'left' then
+				vars.trickster_timer:resetnew(400, 29.01, 32.99)
+				vars.trick_stack = text('reversehighroad') .. '\n' .. vars.trick_stack
+				vars.score += 1200 * vars.combo
+				vars.total_score += 1200 * vars.combo
+				vars.trick_cooldown:resetnew(750, 1, 0)
+			elseif vars.trick_button_queue == 'right' then
+				vars.trickster_timer:resetnew(400, 33.01, 36.99)
+				vars.trick_stack = text('reversesnapflip') .. '\n' .. vars.trick_stack
+				vars.score += 1150 * vars.combo
+				vars.total_score += 1150 * vars.combo
+				vars.trick_cooldown:resetnew(750, 1, 0)
 			else
-				if vars.trick_button_queue == 'up' then
-					vars.trickster_timer:resetnew(400, 21.01, 24.99)
-					vars.trick_done = 'reversetakeoff'
-					vars.score += 1100 * vars.combo
-					vars.total_score += 1100 * vars.combo
-					vars.trick_cooldown:resetnew(750, 1, 0)
-				elseif vars.trick_button_queue == 'down' then
-					vars.trickster_timer:resetnew(400, 25.01, 28.99)
-					vars.trick_done = 'reverseweeble'
-					vars.score += 1000 * vars.combo
-					vars.total_score += 1000 * vars.combo
-					vars.trick_cooldown:resetnew(750, 1, 0)
-				elseif vars.trick_button_queue == 'left' then
-					vars.trickster_timer:resetnew(400, 29.01, 32.99)
-					vars.trick_done = 'reversehighroad'
-					vars.score += 1200 * vars.combo
-					vars.total_score += 1200 * vars.combo
-					vars.trick_cooldown:resetnew(750, 1, 0)
-				elseif vars.trick_button_queue == 'right' then
-					vars.trickster_timer:resetnew(400, 33.01, 36.99)
-					vars.trick_done = 'reversesnapflip'
-					vars.score += 1150 * vars.combo
-					vars.total_score += 1150 * vars.combo
-					vars.trick_cooldown:resetnew(750, 1, 0)
-				else
-					vars.trickster_timer:resetnew(400, 37.01, 40.99)
-					vars.trick_done = 'reverse360'
-					vars.score += 400 * vars.combo
-					vars.total_score += 400 * vars.combo
-					vars.trick_cooldown:resetnew(400, 1, 0)
-				end
+				vars.trickster_timer:resetnew(400, 37.01, 40.99)
+				vars.trick_stack = text('reverse360') .. '\n' .. vars.trick_stack
+				vars.score += 400 * vars.combo
+				vars.total_score += 400 * vars.combo
+				vars.trick_cooldown:resetnew(400, 1, 0)
 			end
 			if save.sfx then assets.hit:play(1, 1 + (vars.tricks_done * 0.2)) end
+			vars.burst:resetnew(300, 1, 7)
 			vars.tricks_done += 1
 			vars.trick_crank = 0
 			vars.trick_button_queue = ''
 		end
 	end
-	if vars.oldo2 > 9000 and vars.o2.value <= 9000 then
-		shakies(500, 2)
-		shakies_y(750, 2)
-		if save.sfx then
-			assets.beep:setVolume(0.1)
-			assets.beep:play()
-		end
-	end
-	if vars.oldo2 > 8000 and vars.o2.value <= 8000 then
-		shakies(500, 3)
-		shakies_y(750, 3)
-		if save.sfx then
-			assets.beep:setVolume(0.2)
-			assets.beep:play()
-		end
-	end
-	if vars.oldo2 > 7000 and vars.o2.value <= 7000 then
-		shakies(500, 4)
-		shakies_y(750, 4)
-		if save.sfx then
-			assets.beep:setVolume(0.3)
-			assets.beep:play()
-		end
-	end
-	if vars.oldo2 > 6000 and vars.o2.value <= 6000 then
-		shakies(500, 5)
-		shakies_y(750, 5)
-		if save.sfx then
-			assets.beep:setVolume(0.4)
-			assets.beep:play()
-		end
-	end
-	if vars.oldo2 > 5000 and vars.o2.value <= 5000 then
-		shakies(500, 6)
-		shakies_y(750, 6)
-		if save.sfx then
-			assets.beep:setVolume(0.5)
-			assets.beep:play()
-		end
-	end
-	if vars.oldo2 > 4000 and vars.o2.value <= 4000 then
-		shakies(500, 7)
-		shakies_y(750, 7)
-		if save.sfx then
-			assets.beep:setVolume(0.6)
-			assets.beep:play()
-		end
-	end
-	if vars.oldo2 > 3000 and vars.o2.value <= 3000 then
-		shakies(500, 8)
-		shakies_y(750, 8)
-		if save.sfx then
-			assets.beep:setVolume(0.8)
-			assets.beep:play()
-		end
-	end
-	if vars.oldo2 > 2000 and vars.o2.value <= 2000 then
-		shakies(500, 9)
-		shakies_y(750, 9)
-		if save.sfx then
-			assets.beep:setVolume(0.9)
-			assets.beep:play()
-		end
-	end
-	if vars.oldo2 > 1000 and vars.o2.value <= 1000 then
-		shakies(500, 10)
-		shakies_y(750, 10)
-		if save.sfx then
-			assets.beep:setVolume(1)
-			assets.beep:play()
-		end
-	end
+	if vars.oldo2 > 20000 and vars.o2.value < 20000 then self:beep(0.1) end
+	if vars.oldo2 > 19000 and vars.o2.value < 19000 then self:beep(0.2) end
+	if vars.oldo2 > 18000 and vars.o2.value < 18000 then self:beep(0.3) end
+	if vars.oldo2 > 17000 and vars.o2.value < 17000 then self:beep(0.4) end
+	if vars.oldo2 > 16000 and vars.o2.value < 16000 then self:beep(0.5) end
+	if vars.oldo2 > 15000 and vars.o2.value < 15000 then self:beep(0.6) end
+	if vars.oldo2 > 14000 and vars.o2.value < 14000 then self:beep(0.7) end
+	if vars.oldo2 > 13000 and vars.o2.value < 13000 then self:beep(0.8) end
+	if vars.oldo2 > 12000 and vars.o2.value < 12000 then self:beep(0.9) end
+	if vars.oldo2 > 11000 and vars.o2.value < 11000 then self:beep(1) end
+	if vars.oldo2 > 10000 and vars.o2.value < 10000 then self:beep(1) end
+	if vars.oldo2 > 9000 and vars.o2.value < 9000 then self:beep(1) end
+	if vars.oldo2 > 8000 and vars.o2.value < 8000 then self:beep(1) end
+	if vars.oldo2 > 7000 and vars.o2.value < 7000 then self:beep(1) end
+	if vars.oldo2 > 6000 and vars.o2.value < 6000 then self:beep(1) end
+	if vars.oldo2 > 5000 and vars.o2.value < 5000 then self:beep(1) end
+	if vars.oldo2 > 4000 and vars.o2.value < 4000 then self:beep(1) end
+	if vars.oldo2 > 3000 and vars.o2.value < 3000 then self:beep(1) end
+	if vars.oldo2 > 2000 and vars.o2.value < 2000 then self:beep(1) end
+	if vars.oldo2 > 1000 and vars.o2.value < 1000 then self:beep(1) end
 	if vars.score > vars.point_threshold and not vars.eligible_to_win and not vars.daily then
 		vars.eligible_to_win = true
 		if save.sfx then assets.powerup:play() end
@@ -1025,4 +1024,29 @@ function game:update()
 		newmusic('audio/music/escape', true, 1.596)
 	end
 	vars.oldo2 = vars.o2.value
+end
+
+function game:beep(intensity)
+	if not vars.won then
+		vars.burst:resetnew(250, 1, 7)
+		shakies(500, intensity * 10)
+		shakies_y(750, intensity * 10)
+		if save.sfx then
+			assets.beep:setVolume(intensity)
+			assets.beep:play()
+		end
+	end
+end
+
+function game:die()
+	if save.sfx then assets.crash:play() end
+	assets.roll:stop()
+	fademusic(900)
+	pd.timer.performAfterDelay(1000, function()
+		if vars.daily then
+			scenemanager:irissceneout(dailyorbit, vars.total_score, vars.best_combo)
+		else
+			scenemanager:irissceneout(gameover, vars.total_score, vars.planet, vars.best_combo)
+		end
+	end)
 end

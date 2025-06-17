@@ -150,6 +150,39 @@ function scenemanager:irissceneout(scene, ...)
 	end
 end
 
+-- This function will transition the scene with an animated effect.
+function scenemanager:irisscenetwo(scene, ...)
+	if self.transitioning then return end -- If there's already a scene transition, go away.
+	self.transitioning = true -- Set this to true
+	self.newscene = scene
+	self.sceneargs = {...}
+	-- Pop any rogue input handlers, leaving the default one.
+	local inputsize = #playdate.inputHandlers - 1
+	for i = 1, inputsize do
+		pd.inputHandlers.pop()
+	end
+	-- IMPORTANT! These two numbers in the timer determine which frames of
+	-- your image table will play during the FIRST HALF of transition period. It
+	-- should be able to go backwards, but they MUST be whole numbers and it
+	-- MUST be within the range of your image table's image count.
+	local transitiontimer = self:iristransition(20, 11)
+	-- After the first timer ends...
+	transitiontimer.timerEndedCallback = function()
+		-- Load the scene, and create a second timer for the other half.
+		self:loadnewscene()
+		-- These two numbers work the same way as the previous, but will
+		-- determine which frames of your image table will play during
+		-- the SECOND HALF of the transition period.
+		transitiontimer = self:iristransition(11, 20)
+		transitiontimer.timerEndedCallback = function()
+			self.sprite_added = false
+			self.sprite:remove()
+			-- After this timer's over, remove the transition and the sprites.
+			self.transitioning = false
+		end
+	end
+end
+
 function scenemanager:iristransition(table_start, table_end)
 	self.sprite = self:newirissprite()
 	local newtimer = pd.timer.new(self.transitiontime, table_start, table_end)

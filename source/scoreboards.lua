@@ -16,6 +16,7 @@ function scoreboards:init(...)
 	function pd.gameWillPause() -- When the game's paused...
 		local menu = pd.getSystemMenu()
 		menu:removeAllMenuItems()
+		pd.setMenuImage(nil)
 		if not scenemanager.transitioning then
 			if not vars.loading then
 				menu:addMenuItem(text('refresh'), function()
@@ -166,14 +167,15 @@ function scoreboards:refreshboards(mode)
 		pd.scoreboards.getScores(vars.mode, function(status, result)
 			if status.code == "OK" then
 				vars.result = result
+				pd.scoreboards.getPersonalBest(vars.mode, function(status, result)
+					vars.loading = false
+					if status.code == "OK" then
+						vars.best = result
+					end
+				end)
 			else
+				vars.loading = false
 				vars.result = "fail"
-			end
-		end)
-		pd.scoreboards.getPersonalBest(vars.mode, function(status, result)
-			vars.loading = false
-			if status.code == "OK" then
-				vars.best = result
 			end
 		end)
 	end

@@ -14,6 +14,12 @@ function interstition:init(...)
 	pd.datastore.write(save)
 	show_crank = false
 
+	function pd.gameWillPause() -- When the game's paused...
+		local menu = pd.getSystemMenu()
+		menu:removeAllMenuItems()
+		pd.setMenuImage(nil)
+	end
+
 	assets = {
 		video = gfx.imagetable.new('images/interstition'),
 		land = smp.new('audio/sfx/land'),

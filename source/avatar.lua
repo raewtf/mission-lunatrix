@@ -15,6 +15,7 @@ function avatar:init(...)
 	function pd.gameWillPause() -- When the game's paused...
 		local menu = pd.getSystemMenu()
 		menu:removeAllMenuItems()
+		pd.setMenuImage(nil)
 	end
 
 	assets = {
@@ -26,6 +27,8 @@ function avatar:init(...)
 		back = smp.new('audio/sfx/back'),
 		move = smp.new('audio/sfx/move'),
 		avatar = gfx.imagetable.new('images/avatar'),
+		arrow = gfx.image.new('images/arrow'),
+		bitmoreoutline2x = gfx.font.new('fonts/bitmoreoutline2x'),
 	}
 
 	vars = {
@@ -51,7 +54,9 @@ function avatar:init(...)
 			else
 				if save.sfx then assets.select:play() end
 				math.ceil(((vars.crank_lerp + 20) % 360) / 36)
-				save.avatar = vars.selection
+				pd.timer.performAfterDelay(scenemanager.transitiontime, function()
+					save.avatar = vars.selection
+				end)
 				scenemanager:transitionscene(title)
 			end
 		end
@@ -82,6 +87,9 @@ function avatar:init(...)
 		assets.stars_l:draw(vars.stars_l.value, 0)
 		gfx.setDitherPattern(0.25, gfx.image.kDitherTypeBayer2x2)
 		gfx.fillRect(0, 0, 400, 240)
+		gfx.setColor(gfx.kColorWhite)
+		gfx.setDitherPattern(0.75, gfx.image.kDitherTypeBayer2x2)
+		gfx.fillRect(0, 165, 400, 59)
 		gfx.setColor(gfx.kColorBlack)
 		assets.cutout:drawTextAligned(text('chooseanicon'), 200, 10, kTextAlignment.center)
 		for i = 1, 10 do
@@ -95,8 +103,17 @@ function avatar:init(...)
 				assets.avatar[n]:drawScaled(175 + (math.sin(math.rad(vars.crank_lerp) + (3.14 * 0.2) - (3.14 * i / 5)) * 150), 250 - (math.cos(math.rad(vars.crank_lerp) + (3.14 * 0.2) - (3.14 * i / 5)) * 150), 2)
 			end
 		end
+		if vars.selection == 0 then
+			assets.bitmoreoutline2x:drawTextAligned(text('playmore'), 200, 170, kTextAlignment.center)
+		else
+			assets.arrow:draw(200 - 13, 175)
+			assets.bitmoreoutline2x:drawTextAligned(text('aok'), 200, 195, kTextAlignment.center)
+		end
 		gfx.setImageDrawMode(gfx.kDrawModeFillWhite)
 		assets.pedallica:drawTextAligned(text('changeicon'), 200, 40, kTextAlignment.center)
+		if save.avatar ~= 11 then
+			assets.pedallica:drawTextAligned(text('pressB'), 200, 226, kTextAlignment.center)
+		end
 		gfx.setImageDrawMode(gfx.kDrawModeCopy)
 	end)
 
